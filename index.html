@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Sistema de Encargos, Envíos y Apartados</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="index.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+</head>
+<body>
+  <!-- ======================================================== -->
+  <!-- PANTALLA COMPLETA DE INICIO DE SESIÓN / AUTENTICACIÓN    -->
+  <!-- ======================================================== -->
+  <div id="appLoginOverlay" class="login-fullscreen-overlay" style="display: none;">
+    <div class="login-card-container">
+      <div class="login-brand-header">
+        <div class="login-app-icon">📦</div>
+        <h1 class="login-app-title">Encargos & Apartados</h1>
+        <p class="login-app-tagline">Ingresa con tu usuario y contraseña para acceder al sistema</p>
+      </div>
+
+      <!-- Formulario Principal de Login -->
+      <form id="appLoginForm" onsubmit="event.preventDefault(); window.app.handleLoginSubmit();" class="login-form">
+        <div id="loginAlertBox" class="login-alert" style="display: none;"></div>
+
+        <div class="form-group" style="margin-bottom: 1.15rem;">
+          <label class="form-label" style="font-weight: 600;">Usuario o Correo:</label>
+          <div class="search-input-wrapper" style="border-radius: var(--radius-md);">
+            <span class="search-icon">👤</span>
+            <input type="text" id="loginUsernameInput" class="form-input" style="padding-left: 2.25rem;" placeholder="ej. admin o carlos" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label" style="font-weight: 600;">Contraseña de Acceso:</label>
+          <div class="search-input-wrapper" style="border-radius: var(--radius-md);">
+            <span class="search-icon">🔑</span>
+            <input type="password" id="loginPasswordInput" class="form-input" style="padding-left: 2.25rem;" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+        </div>
+
+        <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; font-weight: 700;">
+          Iniciar Sesión
+        </button>
+      </form>
+
+      <!-- Botón de apertura de configuración inicial / primera vez -->
+      <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+        <button type="button" id="btnToggleInitialSetup" class="btn-link" style="background: none; border: none; color: var(--brand-primary); font-size: 0.825rem; font-weight: 600; cursor: pointer; text-decoration: underline;" onclick="const b = document.getElementById('initialSupabaseSetupBox'); if(b) b.style.display = b.style.display === 'none' ? 'block' : 'none';">
+          ⚙️ ¿Primera vez en este dispositivo? Configurar Supabase
+        </button>
+      </div>
+
+      <!-- Tarjeta Desplegable de Configuración Inicial de Supabase -->
+      <div id="initialSupabaseSetupBox" style="display: none; margin-top: 1rem; background: var(--bg-tertiary, #f8fafc); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; text-align: left;">
+        <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+          <span>☁️</span> Descargar Base de Datos desde Supabase
+        </h4>
+        <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Ingresa la URL y Anon Key para sincronizar los usuarios y pedidos existentes en tu nube hacia este dispositivo:
+        </p>
+
+        <form id="initialSupabaseForm" onsubmit="event.preventDefault(); window.app.handleInitialSupabaseSetup();">
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label class="form-label" style="font-size: 0.78rem;">Supabase Project URL:</label>
+            <input type="text" id="initSupabaseUrl" class="form-input" style="font-size: 0.85rem;" placeholder="https://tu-proyecto.supabase.co" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-size: 0.78rem;">Supabase Anon Key:</label>
+            <input type="password" id="initSupabaseKey" class="form-input" style="font-size: 0.85rem;" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required>
+          </div>
+          <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;" onclick="document.getElementById('initialSupabaseSetupBox').style.display='none'">
+              Cancelar
+            </button>
+            <button type="submit" id="btnInitSupabaseSubmit" class="btn btn-primary" style="font-size: 0.8rem; padding: 0.35rem 0.85rem;">
+              📥 Guardar y Descargar Base
+            </button>
+          </div>
+          <div id="initSupabaseStatusBox" style="display: none; margin-top: 0.75rem; font-size: 0.8rem; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid transparent;"></div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="app-container">
+    
+    <!-- BARRA SUPERIOR (NAVBAR) -->
+    <header class="top-navbar">
+      <div class="brand-wrapper" onclick="window.app.switchView('dashboard')">
+        <div class="brand-icon">📦</div>
+        <div class="brand-text">
+          <h1>Encargos & Apartados</h1>
+          <span class="brand-tag">v1.5.0 Realtime & Offline</span>
+        </div>
+      </div>
+
+      <!-- Buscador Omnibox Principal -->
+      <div class="navbar-search">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="navSearchInput" placeholder="Buscar por cliente o producto encargado..." autocomplete="off">
+        </div>
+      </div>
+
+      <!-- Acciones de Cabecera -->
+      <div class="navbar-actions">
+        <!-- Indicador de Red y Sincronización en Vivo -->
+        <span id="syncStatusBadge" class="meta-pill sync-badge" title="Estado de sincronización y red">
+          <span class="sync-dot online"></span>
+          <span id="syncStatusText">Verificando...</span>
+        </span>
+
+        <!-- Píldora de Sesión Activa del Usuario y Botón de Salir -->
+        <div id="navUserSession" class="nav-user-session" title="Sesión activa">
+          <span id="navUserAvatar" class="nav-user-avatar">👤</span>
+          <div class="nav-user-details">
+            <span id="navUserName" class="nav-user-name">Usuario</span>
+            <span id="navUserRoleTag" class="nav-user-role">Cargo</span>
+          </div>
+          <button type="button" id="btnToggleDispatcherMode" class="btn btn-secondary" style="display: none; padding: 0.25rem 0.55rem; font-size: 0.75rem;" title="Alternar temporalmente a modo ruta/despachador" onclick="window.app.handleToggleDispatcherMode()">
+            🚚 Modo Ruta
+          </button>
+          <button type="button" id="btnNavLogout" class="btn btn-secondary btn-icon" style="padding: 0.3rem 0.55rem; font-size: 0.85rem;" title="Cerrar Sesión" onclick="window.app.handleNavLogout()">
+            🚪
+          </button>
+        </div>
+
+        <button id="themeToggleBtn" class="btn btn-icon" title="Cambiar Tema (Oscuro/Claro)">
+          🌙
+        </button>
+
+        <button class="btn btn-primary" onclick="window.app.openNewOrderModal()">
+          <span>➕</span> Nuevo Encargo
+        </button>
+      </div>
+    </header>
+
+    <!-- BANNER DE ACTUALIZACIÓN DE VERSIÓN DISPONIBLE -->
+    <div id="appUpdateBanner" class="update-banner" style="display: none;">
+      <div class="update-banner-content">
+        <span class="update-banner-icon">🚀</span>
+        <span class="update-banner-text"><strong>¡Nueva versión disponible!</strong> Hay una actualización del sistema lista para instalar.</span>
+      </div>
+      <div class="update-banner-actions">
+        <button id="btnDismissUpdate" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">Más tarde</button>
+        <button id="btnApplyUpdate" class="btn btn-success" style="padding: 0.25rem 0.8rem; font-size: 0.8rem;">Actualizar Ahora</button>
+      </div>
+    </div>
+
+    <!-- NAVEGACIÓN POR PESTAÑAS -->
+    <nav class="app-nav">
+      <div class="nav-tab active" id="navTabDashboard" data-view="dashboard">
+        <span>📊</span> Panel General
+      </div>
+      <div class="nav-tab" id="navTabSearch" data-view="search">
+        <span>🔍</span> Búsqueda & Apartados
+        <span id="searchCountBadge" class="tab-badge">0</span>
+      </div>
+      <div class="nav-tab" id="navTabOrders" data-view="orders">
+        <span>📦</span> Todos los Encargos
+      </div>
+      <div class="nav-tab" id="navTabDestinations" data-view="destinations">
+        <span>📍</span> Destinos & Rutas
+        <span id="destinationsCountBadge" class="tab-badge">0</span>
+      </div>
+      <div class="nav-tab" id="navTabCustomers" data-view="customers">
+        <span>👥</span> Clientes
+      </div>
+      <div class="nav-tab" id="navTabSettings" data-view="settings">
+        <span>⚙️</span> Configuración
+      </div>
+    </nav>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="main-content">
+
+      <!-- VISTA 1: DASHBOARD -->
+      <section id="view-dashboard" class="view-section active">
+        <!-- Métricas Principales -->
+        <div class="metrics-grid">
+          <div class="metric-card debt">
+            <span class="metric-label">Por Cobrar (Saldos Deudores)</span>
+            <span class="metric-value" id="dashTotalDebt">$ 0.00</span>
+            <span class="metric-hint">Total pendiente de liquidación</span>
+          </div>
+          <div class="metric-card collected">
+            <span class="metric-label">Recaudado (Anticipos & Abonos)</span>
+            <span class="metric-value" id="dashTotalCollected">$ 0.00</span>
+            <span class="metric-hint">Dinero en caja por encargos</span>
+          </div>
+          <div class="metric-card orders">
+            <span class="metric-label">Encargos Activos</span>
+            <span class="metric-value" id="dashActiveOrders">0</span>
+            <span class="metric-hint">Pedidos vigentes en tránsito</span>
+          </div>
+          <div class="metric-card layaway">
+            <span class="metric-label">Falta Anticipo Inicial</span>
+            <span class="metric-value" id="dashPendingDeposit">0</span>
+            <span class="metric-hint">Aún no abonan el mínimo exigido</span>
+          </div>
+        </div>
+
+        <!-- Próximos Destinos y Envíos -->
+        <div class="content-card">
+          <div class="card-header-flex">
+            <h2 class="card-title">📍 Próximos Destinos & Envíos por Ciudad</h2>
+          </div>
+          <div id="dashDestinationsList"></div>
+        </div>
+
+        <!-- Encargos Recientes -->
+        <div class="content-card">
+          <div class="card-header-flex">
+            <h2 class="card-title">⚡ Encargos Recientes</h2>
+            <button class="btn btn-secondary" onclick="window.app.switchView('orders')">Ver todos</button>
+          </div>
+          <div id="dashRecentOrdersList" class="orders-list-grid"></div>
+        </div>
+      </section>
+
+      <!-- VISTA 2: BÚSQUEDA RÁPIDA & SISTEMA POR APARTADO -->
+      <section id="view-search" class="view-section">
+        <div class="content-card">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title">🔍 Buscador Express & Sistema por Apartado</h2>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
+                Escribe el nombre de un cliente o el producto que encargó para registrar abonos progresivos o la <strong>Cancelación Total</strong> en un clic.
+              </p>
+            </div>
+            <div style="flex: 1; max-width: 400px;">
+              <input type="text" id="quickSearchInput" class="form-input" style="width: 100%;" placeholder="Filtrar por cliente, teléfono o producto..." autofocus>
+            </div>
+          </div>
+
+          <div id="searchResultsContainer" class="orders-list-grid"></div>
+        </div>
+      </section>
+
+      <!-- VISTA 3: ENCARGOS & APARTADOS (Listado Completo) -->
+      <section id="view-orders" class="view-section">
+        <div class="content-card">
+          <div class="card-header-flex">
+            <h2 class="card-title">📦 Todos los Encargos y Apartados</h2>
+            <div class="filters-bar">
+              <select id="orderCityFilter" class="form-select">
+                <option value="all">Todas las ciudades</option>
+              </select>
+              <select id="orderStatusFilter" class="form-select">
+                <option value="all">Todos los estados</option>
+                <option value="pendiente_anticipo">Falta Anticipo</option>
+                <option value="anticipo_pagado">Anticipo Pagado / En curso</option>
+                <option value="liquidado_total">Liquidado al 100%</option>
+                <option value="entregado">Entregado</option>
+              </select>
+              <button class="btn btn-primary" onclick="window.app.openNewOrderModal()">➕ Nuevo Encargo</button>
+            </div>
+          </div>
+
+          <div id="ordersListContainer" class="orders-list-grid"></div>
+        </div>
+      </section>
+
+      <!-- VISTA: DESTINOS & RUTAS FRECUENTES -->
+      <section id="view-destinations" class="view-section">
+        <div class="content-card">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title">📍 Catálogo de Destinos, Puntos de Entrega & Rutas</h2>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
+                Guarda terminales, paradas o ubicaciones recibidas por WhatsApp para reutilizarlas con cualquier cliente y abrir la ruta en Google Maps en 1 clic.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <input type="text" id="destinationsSearchInput" class="form-input" placeholder="Buscar destino o ciudad..." style="width: 240px;">
+              <button class="btn btn-primary" onclick="window.app.openNewDestinationModal()">
+                ➕ Agregar Ubicación / Ruta
+              </button>
+            </div>
+          </div>
+
+          <div id="destinationsListContainer" class="orders-list-grid"></div>
+        </div>
+      </section>
+
+      <!-- VISTA 4: DIRECTORIO DE CLIENTES -->
+      <section id="view-customers" class="view-section">
+        <div class="content-card">
+          <div class="card-header-flex">
+            <h2 class="card-title">👥 Directorio de Clientes y Saldos</h2>
+            <button class="btn btn-primary" onclick="window.app.openNewCustomerModal()">➕ Nuevo Cliente</button>
+          </div>
+          <div id="customersListContainer" class="orders-list-grid"></div>
+        </div>
+      </section>
+
+      <!-- VISTA 5: CONFIGURACIÓN & NUBE -->
+      <section id="view-settings" class="view-section">
+        <!-- SECCIÓN DE LOGIN / DESBLOQUEO DE USUARIO (Visible cuando el cargo es Despachador o no es Administrador) -->
+        <div id="userLoginSection" class="content-card" style="display: none; max-width: 650px; margin: 0 auto 1.5rem auto;">
+          <div style="text-align: center; margin-bottom: 1.5rem;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔐</div>
+            <h2 class="card-title" style="font-size: 1.35rem; justify-content: center;">Acceso a Configuración del Sistema</h2>
+            <p style="font-size: 0.875rem; color: var(--text-secondary); max-width: 500px; margin: 0.5rem auto 0 auto;">
+              Esta sección contiene parámetros comerciales sensibles, credenciales de Supabase y gestión de base de datos.
+            </p>
+          </div>
+
+          <!-- Perfil actual del usuario -->
+          <div style="background: var(--bg-tertiary, #f8fafc); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.85rem;">
+              <span id="loginCurrentAvatar" style="font-size: 2rem;">🚚</span>
+              <div>
+                <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">Sesión Activa:</div>
+                <div id="loginCurrentName" style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Carlos Despachador</div>
+                <div id="loginCurrentRole" style="font-size: 0.8rem; color: #b45309; font-weight: 600;">🚚 Despachador / Logística (Modo Operativo)</div>
+              </div>
+            </div>
+            <span class="meta-pill" style="background: rgba(245, 158, 11, 0.15); color: #d97706; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.3);">Configuración Restringida</span>
+          </div>
+
+          <!-- Formulario de cambio de usuario / login admin -->
+          <form id="settingsLoginForm" onsubmit="event.preventDefault(); window.app.handleSettingsLogin();" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+            <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+              <span>👤</span> Iniciar Sesión con Usuario del Sistema:
+            </h3>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Selecciona el Usuario para ingresar:</label>
+              <select id="settingsUserSelect" class="form-select" style="font-size: 0.95rem; font-weight: 600;">
+                <!-- Opciones dinámicas de usuarios locales / Supabase -->
+              </select>
+              <small style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">
+                ℹ️ Los usuarios se almacenan en tu base local y se sincronizan automáticamente con la tabla <code>users</code> de Supabase.
+              </small>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem;">
+              <button type="submit" id="btnLoginAsAdmin" class="btn btn-primary" style="padding: 0.6rem 1.25rem;">
+                🔓 Iniciar Sesión / Desbloquear Configuración
+              </button>
+            </div>
+          </form>
+
+          <div style="margin-top: 1rem; text-align: center;">
+            <p style="font-size: 0.78rem; color: var(--text-muted);">
+              🛡️ Al ingresar como Administrador, se desbloquearán inmediatamente los datos de la empresa, credenciales Supabase y copias de seguridad.
+            </p>
+          </div>
+        </div>
+
+        <!-- BANNER DE ADMINISTRADOR ACTIVO (Visible solo cuando es Admin) -->
+        <div id="adminSessionHeader" class="content-card" style="display: none; margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%); border: 1px solid rgba(79, 70, 229, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.85rem;">
+              <span style="font-size: 2.2rem;">👑</span>
+              <div>
+                <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-primary); font-weight: 700;">Modo Administrador Habilitado</div>
+                <div id="adminHeaderUserName" style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">Luis Admin</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">Control total sobre finanzas, credenciales Supabase y base de datos</div>
+              </div>
+            </div>
+            <button type="button" id="btnAdminLogout" class="btn btn-secondary" style="font-size: 0.85rem;">
+              🚪 Cambiar a Modo Despachador
+            </button>
+          </div>
+        </div>
+
+        <div id="adminSettingsSection" class="content-card">
+          <h2 class="card-title">🏢 Información de tu Negocio / Empresa</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+            Estos datos aparecerán en los tickets térmicos y mensajes de WhatsApp/Email enviados a tus clientes.
+          </p>
+
+          <form id="settingsForm" onsubmit="event.preventDefault(); window.app.saveSettingsFromForm();">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Nombre Comercial de la Empresa:</label>
+                <input type="text" id="setEmpresaNombre" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nombre del Propietario / Responsable:</label>
+                <input type="text" id="setEmpresaPropietario" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Teléfono / WhatsApp de Contacto:</label>
+                <input type="text" id="setEmpresaTelefono" class="form-input" placeholder="+591 70000000">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Correo Electrónico:</label>
+                <input type="email" id="setEmpresaEmail" class="form-input" placeholder="contacto@empresa.com">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Símbolo de Moneda:</label>
+                <input type="text" id="setEmpresaMoneda" class="form-input" style="max-width: 120px;" placeholder="$ o Bs">
+              </div>
+              <div class="form-group">
+                <label class="form-label">% Anticipo Mínimo Predeterminado:</label>
+                <input type="number" id="setEmpresaAnticipo" class="form-input" min="0" max="100" style="max-width: 140px;" placeholder="50">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Prefijo Telefónico País (WhatsApp):</label>
+                <input type="text" id="setEmpresaPrefijoPais" class="form-input" style="max-width: 160px;" placeholder="+58" value="+58">
+                <small style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                  Por defecto <strong>+58</strong> (Venezuela). Evita errores en WhatsApp al autocompletar números locales (ej: 0414-1234567 ➔ 584141234567).
+                </small>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 1rem;">
+              <label class="form-label">Mensaje al pie del Ticket Térmico:</label>
+              <textarea id="setEmpresaTicketMensaje" class="form-textarea" rows="2"></textarea>
+            </div>
+
+            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+              <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem;">☁️ Sincronización Opcional con Nube (Supabase)</h3>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                La aplicación funciona primeramente <strong>OFFLINE</strong>. Si deseas respaldar o sincronizar tus datos con Supabase, ingresa tus credenciales aquí:
+              </p>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Supabase URL:</label>
+                  <input type="text" id="setSupabaseUrl" class="form-input" placeholder="https://tu-proyecto.supabase.co">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Supabase Anon Key:</label>
+                  <input type="password" id="setSupabaseKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                </div>
+              </div>
+
+              <div style="margin-top: 0.75rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="button" id="btnTestSupabase" class="btn btn-secondary">Probar Conexión Supabase</button>
+                <button type="button" id="btnManualSyncNow" class="btn btn-secondary">🔄 Sincronizar con la Nube Ahora</button>
+                <button type="button" id="btnDownloadAndRestart" class="btn btn-secondary">📥 Descargar Base Completa y Reiniciar</button>
+                <button type="button" id="btnShowSupabaseSql" class="btn btn-secondary">📋 Ver Script SQL para Supabase</button>
+              </div>
+
+              <!-- Caja de resultados y diagnóstico en vivo para Supabase -->
+              <div id="supabaseTestResultBox" style="display: none; margin-top: 0.85rem; padding: 0.85rem 1rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid transparent; line-height: 1.45;"></div>
+
+              <!-- Caja informativa del Guardián Anti-Pisado -->
+              <div style="margin-top: 1rem; background: var(--color-success-bg); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.75rem 1rem; display: flex; gap: 0.75rem; align-items: flex-start;">
+                <span style="font-size: 1.25rem;">🛡️</span>
+                <div style="font-size: 0.825rem; color: var(--text-secondary);">
+                  <strong style="color: var(--color-success);">Sistema de Protección Anti-Pisado Activo:</strong>
+                  Si trabajas sin internet y registras abonos o pedidos, al volver a conectarte tus datos más nuevos nunca serán sobrescritos por copias antiguas de la nube o de otros dispositivos. Se aplica resolución inteligente basada en fecha de última modificación (Last-Write-Wins verificado).
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Gestión de Usuarios y Roles del Sistema -->
+        <div id="usersManagementSection" class="content-card">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title">👥 Usuarios y Cargos del Sistema (Jerarquía)</h2>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
+                Define quién es <strong>👑 Administrador</strong> (control total) y quién es <strong>🚚 Despachador</strong> (operativa de entregas y abonos en ruta).
+              </p>
+            </div>
+            <button class="btn btn-primary" onclick="window.app.openNewUserModal()">
+              ➕ Crear Usuario
+            </button>
+          </div>
+          <div id="usersListContainer" class="orders-list-grid"></div>
+        </div>
+
+        <!-- Copias de Seguridad y Respaldo -->
+        <div id="backupManagementSection" class="content-card">
+          <h2 class="card-title">💾 Copias de Respaldo Local (Offline)</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Exporta todos tus clientes, pedidos, destinos y configuraciones a un archivo seguro en tu dispositivo o restaura una copia anterior:
+          </p>
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+            <button id="btnExportBackup" class="btn btn-secondary">
+              📥 Descargar Copia de Seguridad (JSON)
+            </button>
+            <label class="btn btn-secondary" style="cursor: pointer;">
+              📤 Restaurar desde Archivo JSON
+              <input type="file" id="btnImportBackupFile" accept=".json" style="display: none;">
+            </label>
+            <button id="btnLoadDemoData" class="btn btn-secondary">
+              🎲 Recargar Datos de Demostración
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 1: NUEVO ENCARGO / APARTADO                        -->
+    <!-- ======================================================== -->
+    <div id="newOrderModal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title">📦 Registrar Nuevo Encargo / Apartado</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('newOrderModal')">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); window.app.submitNewOrder();">
+          <div class="modal-body">
+            
+            <!-- Selector de Cliente con botón rápido -->
+            <div class="form-group">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="form-label">Cliente que encarga:</label>
+                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="window.app.openNewCustomerModal()">
+                  ➕ Crear Cliente Nuevo
+                </button>
+              </div>
+              <select id="newOrderCustomerSelect" class="form-select" required></select>
+            </div>
+
+            <!-- Selector rápido de ubicaciones guardadas en catálogo -->
+            <div class="form-group">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="form-label">📍 Cargar desde Ubicación Guardada (Opcional):</label>
+                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="window.app.openNewDestinationModal()">
+                  ➕ Nueva Ubicación
+                </button>
+              </div>
+              <select id="newOrderSavedDestSelect" class="form-select">
+                <option value="">-- O ingresa los datos de entrega abajo --</option>
+              </select>
+            </div>
+
+            <!-- Destino, Ubicación Maps y Fecha -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Ciudad de Entrega / Destino:</label>
+                <input type="text" id="newOrderCityInput" class="form-input" placeholder="Ej. Cochabamba, Santa Cruz" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Punto de Entrega / Dirección:</label>
+                <input type="text" id="newOrderDeliveryPoint" class="form-input" placeholder="Ej. Terminal de Buses / Av. Heroínas #456">
+              </div>
+            </div>
+
+            <!-- Ubicación Precisa Google Maps / GPS -->
+            <div class="form-group">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="form-label">Ubicación / Link de Google Maps o WhatsApp:</label>
+                <button type="button" id="btnCaptureGPS" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="window.app.captureCurrentGPS()">
+                  📍 Capturar mi GPS Actual
+                </button>
+              </div>
+              <input type="text" id="newOrderMapsUrl" class="form-input" placeholder="Pega el link de Google Maps/WhatsApp o usa el botón de GPS">
+              <label style="font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.4rem; cursor: pointer; margin-top: 4px;">
+                <input type="checkbox" id="newOrderSaveAsFrequentDest">
+                ⭐ Guardar esta ubicación en el catálogo para futuros clientes
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Fecha Estimada de Entrega / Viaje:</label>
+              <input type="date" id="newOrderDateInput" class="form-input">
+            </div>
+
+            <!-- Tabla de Ítems / Productos -->
+            <div class="form-group">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                <label class="form-label">Productos Encargados:</label>
+                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="window.app.addNewItemRow()">
+                  ➕ Agregar Otro Producto
+                </button>
+              </div>
+              <div class="items-table-wrapper" id="newOrderItemsRows">
+                <!-- Filas dinámicas -->
+              </div>
+            </div>
+
+            <!-- Costo de Envío / Comisión -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Comisión de traslado / Encomienda:</label>
+                <input type="number" id="newOrderCommission" class="form-input" value="0" min="0" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">% de Anticipo Exigido:</label>
+                <input type="number" id="newOrderDepositPercent" class="form-input" value="50" min="0" max="100">
+              </div>
+            </div>
+
+            <!-- Resumen Financiero Calculado -->
+            <div style="background: var(--bg-tertiary); padding: 0.85rem; border-radius: var(--radius-md); display: flex; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">COSTO TOTAL ESTIMADO:</div>
+                <div id="newOrderCalculatedTotal" style="font-size: 1.25rem; font-weight: 800; font-family: var(--font-mono);">$ 0.00</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">ANTICIPO MÍNIMO SUGERIDO:</div>
+                <div id="newOrderCalculatedDeposit" style="font-size: 1.25rem; font-weight: 800; color: var(--brand-primary); font-family: var(--font-mono);">$ 0.00</div>
+              </div>
+            </div>
+
+            <!-- Primer Abono Inmediato -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Primer Abono en este momento:</label>
+                <input type="number" id="newOrderFirstPayment" class="form-input" value="0" min="0" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Método del Primer Abono:</label>
+                <select id="newOrderFirstPaymentMethod" class="form-select">
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia QR">Transferencia QR</option>
+                  <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                </select>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('newOrderModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Encargo</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 2: AGREGAR ABONO / CUOTA DE APARTADO               -->
+    <!-- ======================================================== -->
+    <div id="paymentModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">➕ Registrar Abono / Cuota</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('paymentModal')">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); window.app.submitAddPayment();">
+          <div class="modal-body">
+            <div style="background: var(--bg-tertiary); padding: 0.85rem; border-radius: var(--radius-md);">
+              <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                <span>Folio: <strong id="modalPayOrderId"></strong></span>
+                <span>Cliente: <strong id="modalPayCustomerName"></strong></span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px;">
+                <span style="font-size: 0.85rem; color: var(--text-muted);">Saldo Pendiente:</span>
+                <span id="modalPayPendingBalance" style="font-size: 1.35rem; font-weight: 800; color: var(--color-danger); font-family: var(--font-mono);"></span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Monto a abonar:</label>
+              <input type="number" id="modalPayAmountInput" class="form-input" min="0.5" step="0.5" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Método de pago:</label>
+              <select id="modalPayMethod" class="form-select">
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia QR">Transferencia QR</option>
+                <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Comprobante / Referencia (Opcional):</label>
+              <input type="text" id="modalPayRef" class="form-input" placeholder="Ej. QR-9281">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('paymentModal')">Cancelar</button>
+            <button type="submit" class="btn btn-success">Registrar Abono</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 3: PERFIL DE CLIENTE (Historial & Saldos)          -->
+    <!-- ======================================================== -->
+    <div id="customerProfileModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 720px;">
+        <div class="modal-header">
+          <h3 class="modal-title">👤 Perfil e Historial del Cliente</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('customerProfileModal')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="background: var(--bg-tertiary); padding: 1.25rem; border-radius: var(--radius-md);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <h2 id="profCustomerName" style="font-size: 1.3rem; font-weight: 800;"></h2>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
+                  📞 <span id="profCustomerPhone"></span> &bull; ✉️ <span id="profCustomerEmail"></span>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px;">
+                  📍 Ciudad: <span id="profCustomerCity"></span> &bull; Dirección: <span id="profCustomerAddress"></span>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">SALDO DEUDOR CONSOLIDADO</div>
+                <div id="profCustomerDebt" style="font-size: 1.6rem; font-weight: 800; color: var(--color-danger); font-family: var(--font-mono);">$ 0.00</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">Total histórico comprado: <strong id="profCustomerTotalSpent"></strong></div>
+              </div>
+            </div>
+          </div>
+
+          <h4 style="font-size: 1rem; font-weight: 700; margin-top: 0.5rem;">Historial de Encargos y Apartados</h4>
+          <div id="profOrdersList" class="orders-list-grid"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('customerProfileModal')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 4: NUEVO CLIENTE EXPRESS                           -->
+    <!-- ======================================================== -->
+    <div id="newCustomerModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">👤 Crear Nuevo Cliente</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('newCustomerModal')">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); window.app.submitNewCustomer();">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Nombre Completo:</label>
+              <input type="text" id="newCustName" class="form-input" placeholder="Ej. Juan Pérez" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Teléfono / WhatsApp:</label>
+              <input type="text" id="newCustPhone" class="form-input" placeholder="Ej. +591 70012345">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Correo Electrónico:</label>
+              <input type="email" id="newCustEmail" class="form-input" placeholder="cliente@correo.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ciudad Habitual:</label>
+              <input type="text" id="newCustCity" class="form-input" placeholder="Ej. Cochabamba, La Paz">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dirección / Punto de Entrega:</label>
+              <input type="text" id="newCustAddress" class="form-input" placeholder="Ej. Terminal de buses">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('newCustomerModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Registrar Cliente</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 5: DESTINO / UBICACIÓN FRECUENTE                    -->
+    <!-- ======================================================== -->
+    <div id="destinationModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="destinationModalTitle">📍 Registrar Ubicación / Ruta</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('destinationModal')">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); window.app.submitDestinationForm();">
+          <input type="hidden" id="destEditId">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Nombre del Punto / Destino:</label>
+              <input type="text" id="destNombreInput" class="form-input" placeholder="Ej. Terminal Bimodal, Oficina Central, Parada Norte" required>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Ciudad:</label>
+                <input type="text" id="destCiudadInput" class="form-input" placeholder="Ej. Santa Cruz, Cochabamba" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Categoría:</label>
+                <select id="destCategoriaSelect" class="form-select">
+                  <option value="Terminal">Terminal / Estación</option>
+                  <option value="Punto de Encuentro">Punto de Encuentro</option>
+                  <option value="Almacén / Tienda">Almacén / Tienda</option>
+                  <option value="Domicilio">Domicilio / Particular</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Dirección / Referencia:</label>
+              <input type="text" id="destDireccionInput" class="form-input" placeholder="Ej. Av. Intermodal entre 3er y 4to Anillo, Puerta 3">
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="form-label">Link de Google Maps o WhatsApp / Coordenadas:</label>
+                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="window.app.captureGPSForDestination()">
+                  📍 Mi GPS Actual
+                </button>
+              </div>
+              <input type="text" id="destMapsUrlInput" class="form-input" placeholder="Pega el link de Google Maps, de WhatsApp o coordenadas">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Notas e Indicaciones de Entrega (Opcional):</label>
+              <textarea id="destNotasInput" class="form-textarea" rows="2" placeholder="Ej. Horario de atención, número de contacto del encargado de la parada..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('destinationModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btnSaveDestText">Guardar Ubicación</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 6: USUARIO DEL SISTEMA POR CARGO                   -->
+    <!-- ======================================================== -->
+    <div id="userModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="userModalTitle">👥 Crear Usuario del Sistema</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('userModal')">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); window.app.submitUserForm();">
+          <input type="hidden" id="userEditId">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Nombre Completo:</label>
+              <input type="text" id="userNameInput" class="form-input" placeholder="Ej. Carlos Despachador" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Cargo / Rol en el Negocio:</label>
+              <select id="userRoleSelect" class="form-select">
+                <option value="dispatcher">🚚 Despachador / Logística (Entregas, Rutas en Maps y Abonos)</option>
+                <option value="admin">👑 Administrador (Acceso Total y Configuración)</option>
+              </select>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Usuario de Acceso (Login):</label>
+                <input type="text" id="userUsernameInput" class="form-input" placeholder="ej. carlos" required autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contraseña / PIN:</label>
+                <input type="password" id="userPasswordInput" class="form-input" placeholder="••••••••" required autocomplete="new-password">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Teléfono / WhatsApp:</label>
+              <input type="text" id="userPhoneInput" class="form-input" placeholder="+591 70000000">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Correo Electrónico:</label>
+              <input type="email" id="userEmailInput" class="form-input" placeholder="usuario@empresa.com">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('userModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Usuario</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: SCRIPT SQL DE SUPABASE (TABLAS, RLS Y REALTIME)     -->
+    <!-- ======================================================== -->
+    <div id="supabaseSqlModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 760px; max-height: 88vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h3 class="modal-title">⚡ Script SQL de Inicialización para Supabase</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('supabaseSqlModal')">✕</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; flex: 1;">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            Ejecuta este script en el <strong>SQL Editor</strong> de tu proyecto en Supabase. Creará automáticamente las tablas (<code>customers</code>, <code>orders</code>, <code>destinations</code>, <code>users</code>, <code>settings</code>), configurará las políticas de seguridad (RLS para tu anon key) y activará la replicación en tiempo real (<strong>Realtime</strong> con <code>REPLICA IDENTITY FULL</code>).
+          </p>
+          <pre style="background: var(--bg-tertiary, #0f172a); color: #38bdf8; padding: 1rem; border-radius: var(--radius-md); font-family: 'Consolas', 'Courier New', monospace; font-size: 0.78rem; overflow-x: auto; white-space: pre; border: 1px solid var(--border-color); max-height: 380px;"><code id="supabaseSqlCode">-- Cargando script...</code></pre>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <button type="button" id="btnCopySupabaseSql" class="btn btn-primary">
+            📋 Copiar al Portapapeles
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('supabaseSqlModal')">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENEDOR DE TICKETS TÉRMICOS PARA IMPRESIÓN LIMPIA -->
+    <div id="ticketPrintArea"></div>
+
+    <!-- CONTENEDOR DE ALERTAS TOAST -->
+    <div id="toastContainer" class="toast-container"></div>
+
+  </div>
+
+  <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
