@@ -80,16 +80,27 @@ class SyncService {
         const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
 
         if (incomingTime > localTime) {
-          // El entrante es más reciente -> Se actualiza
-          localMap.set(incoming.id, incoming);
+          // El entrante es más reciente -> Se actualiza preservando propiedades si vienen vacías
+          const merged = { ...local, ...incoming };
+          if (incoming.adquirido === undefined || incoming.adquirido === null) {
+            merged.adquirido = Boolean(local.adquirido);
+          }
+          if (incoming.archivado === undefined || incoming.archivado === null) {
+            merged.archivado = Boolean(local.archivado);
+          } else if (local.archivado && !incoming.archivado) {
+            merged.archivado = true;
+            merged.fechaArchivado = local.fechaArchivado;
+          }
+          if (incoming.entregado === undefined || incoming.entregado === null) {
+            merged.entregado = Boolean(local.entregado);
+          }
+          localMap.set(incoming.id, merged);
           updatedCount++;
-        } else if (localTime > incomingTime) {
-          // ¡ALERTA ANTI-PISADO! El dato local es más reciente (ej. un abono hecho offline).
-          // Se mantiene el local y se previene que la base vieja lo sobrescriba.
+        } else if (localTime >= incomingTime) {
+          // ¡ALERTA ANTI-PISADO! El dato local es más reciente o igual.
+          // Se mantiene el local y se previene que la base remota lo sobrescriba.
           conflictsPrevented++;
-          console.warn(`[SyncService] Protección anti-pisado: Registro local ${local.id} es más reciente (${new Date(localTime).toISOString()}) que el entrante (${new Date(incomingTime).toISOString()}).`);
-        } else {
-          // Tienen el mismo timestamp: se mantiene
+          console.warn(`[SyncService] Protección anti-pisado: Registro local ${local.id} es más reciente o igual (${new Date(localTime).toISOString()}) que el entrante (${new Date(incomingTime).toISOString()}).`);
         }
       }
     });

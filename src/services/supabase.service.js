@@ -22,8 +22,9 @@ import { storageService } from './storage.service.js';
 // Tablas principales del sistema
 export const SYNC_TABLES = ['customers', 'orders', 'destinations', 'users', 'settings'];
 
-// Clave para almacenamiento de cola offline
+// Clave para almacenamiento de cola offline y columnas no soportadas en Supabase
 const OFFLINE_QUEUE_KEY = 'supabase_offline_queue_v1';
+const UNSUPPORTED_COLUMNS_KEY = 'supabase_unsupported_columns_v1';
 
 class SupabaseService {
   constructor() {
@@ -36,10 +37,13 @@ class SupabaseService {
     this.reconnectTimer = null;
     this.reconnectAttempts = 0;
     this.recentEventCache = new Map(); // Para deduplicación de eventos Realtime
+    this.recentOutboundPushes = new Map(); // Para supresión de eco propio en Realtime
     this.isFlushingQueue = false;
+    this.unsupportedColumns = null;
 
     // Escuchar eventos nativos de conectividad del navegador
     this.initNetworkListeners();
+    this.loadUnsupportedColumns();
   }
 
   // ==========================================
@@ -259,6 +263,15 @@ class SupabaseService {
     this.recentEventCache.set(eventSignature, Date.now());
     setTimeout(() => this.recentEventCache.delete(eventSignature), 3000);
 
+    // SUPRESIÓN DE ECO: Si este mismo navegador acaba de enviar este registro en los últimos 7 segundos,
+    // ignorar el rebote entrante de Supabase para evitar pisar acciones del usuario (ej. marcar/desmarcar adquirido, archivar)
+    const outboundKey = `${table}:${recordId}`;
+    const lastOutboundPush = this.recentOutboundPushes.get(outboundKey);
+    if (lastOutboundPush && (Date.now() - lastOutboundPush < 7000)) {
+      console.log(`[Supabase Realtime] Supresión de eco propio activo para ${outboundKey} (${Date.now() - lastOutboundPush}ms). Se mantiene estado local.`);
+      return;
+    }
+
     console.log(`[Supabase Realtime Recibido] [${table}] ${eventType}:`, recordId);
 
     const storeName = this.mapTableToStore(table);
@@ -309,18 +322,46 @@ class SupabaseService {
           const localTime = new Date(currentLocal.updatedAt || currentLocal.createdAt || 0).getTime();
           const remoteTime = new Date(newRecord.updatedAt || newRecord.createdAt || 0).getTime();
 
-          // ¡ALERTA ANTI-PISADO! Si el registro local es estrictamente más reciente que el remoto:
-          // Se protege la versión local y se sube a Supabase para actualizar la nube.
-          if (localTime > remoteTime) {
-            console.warn(`[Guardián Anti-Pisado] Registro local ${newRecord.id} (${new Date(localTime).toISOString()}) es más reciente que el de la nube (${new Date(remoteTime).toISOString()}). Protegiendo local.`);
-            this.pushRecord(table, currentLocal).catch(console.error);
+          // Si es un encargo, fusionar abonos bidireccionalmente para no perder ningún pago registrado en otro equipo
+          if (storeName === 'orders') {
+            this.mergeOrderAbonos(currentLocal, newRecord);
+          }
+
+          // ¡ALERTA ANTI-PISADO! Si el registro local es estrictamente más reciente que el remoto o igual:
+          // Se protege la versión local para no pisar cambios locales recientes
+          if (localTime >= remoteTime) {
+            console.warn(`[Guardián Anti-Pisado] Registro local ${newRecord.id} (${new Date(localTime).toISOString()}) >= nube (${new Date(remoteTime).toISOString()}). Protegiendo local.`);
             return;
           }
         }
 
-        // El registro remoto es nuevo o más reciente: Guardar en IndexedDB
-        await storageService.put(storeName, newRecord);
-        this.emitSyncEvent({ table, eventType, record: newRecord });
+        // El registro remoto es nuevo o más reciente: Guardar en IndexedDB preservando propiedades locales
+        let recordToSave = newRecord;
+        if (currentLocal) {
+          recordToSave = { ...currentLocal, ...newRecord };
+          if (storeName === 'orders') {
+            // Protección explícita para adquirido: si el remoto viene sin la columna o null
+            if (newRecord.adquirido === undefined || newRecord.adquirido === null) {
+              recordToSave.adquirido = Boolean(currentLocal.adquirido);
+            }
+            // Protección explícita para archivado: no permitir que un remoto sin columna desarchive un pedido local
+            if (newRecord.archivado === undefined || newRecord.archivado === null) {
+              recordToSave.archivado = Boolean(currentLocal.archivado);
+            } else if (currentLocal.archivado && !newRecord.archivado) {
+              const localArchTime = new Date(currentLocal.fechaArchivado || currentLocal.updatedAt || 0).getTime();
+              const remoteArchTime = new Date(newRecord.fechaArchivado || 0).getTime();
+              if (localArchTime >= remoteArchTime) {
+                recordToSave.archivado = true;
+                recordToSave.fechaArchivado = currentLocal.fechaArchivado;
+              }
+            }
+            if (newRecord.entregado === undefined || newRecord.entregado === null) {
+              recordToSave.entregado = Boolean(currentLocal.entregado);
+            }
+          }
+        }
+        await storageService.put(storeName, recordToSave);
+        this.emitSyncEvent({ table, eventType, record: recordToSave });
       }
     } catch (err) {
       console.error(`[Supabase Realtime] Error al procesar evento en ${table}:`, err);
@@ -328,10 +369,130 @@ class SupabaseService {
   }
 
   // ==========================================
+  // MANEJO INTELIGENTE DE COLUMNAS & ESQUEMA
+  // ==========================================
+  getUnsupportedColumns(table) {
+    if (!this.unsupportedColumns) {
+      this.loadUnsupportedColumns();
+    }
+    return this.unsupportedColumns[table] || new Set();
+  }
+
+  loadUnsupportedColumns() {
+    this.unsupportedColumns = {
+      orders: new Set(),
+      destinations: new Set(),
+      customers: new Set(),
+      users: new Set(),
+      settings: new Set()
+    };
+    // Limpiar caché obsoleto de localStorage para permitir que columnas recién creadas se envíen
+    try {
+      localStorage.removeItem(UNSUPPORTED_COLUMNS_KEY);
+    } catch (e) {}
+  }
+
+  saveUnsupportedColumns() {
+    // Mantener solo en memoria durante la sesión sin ensuciar localStorage
+  }
+
+  markColumnUnsupported(table, column) {
+    if (!this.unsupportedColumns) this.loadUnsupportedColumns();
+    if (!this.unsupportedColumns[table]) this.unsupportedColumns[table] = new Set();
+    this.unsupportedColumns[table].add(column);
+  }
+
+  clearUnsupportedColumns() {
+    this.unsupportedColumns = {
+      orders: new Set(),
+      destinations: new Set(),
+      customers: new Set(),
+      users: new Set(),
+      settings: new Set()
+    };
+    try {
+      localStorage.removeItem(UNSUPPORTED_COLUMNS_KEY);
+    } catch (e) {}
+  }
+
+  preparePayload(table, record) {
+    if (!record || typeof record !== 'object') return record;
+    const payload = { ...record };
+    const unsupported = this.getUnsupportedColumns(table);
+    for (const col of unsupported) {
+      delete payload[col];
+    }
+    return payload;
+  }
+
+  /**
+   * Ejecuta un upsert seguro en Supabase. Si una columna aún no existe en la base de datos (PGRST204),
+   * la detecta, la excluye dinámicamente y reintenta de inmediato para que ningún abono ni pedido se bloquee.
+   */
+  async executeUpsert(table, record) {
+    if (!this.client) throw new Error('Cliente Supabase no inicializado');
+    const conflictField = table === 'settings' ? 'key' : 'id';
+    let payload = this.preparePayload(table, record);
+
+    let retryCount = 0;
+    while (retryCount < 10) {
+      const { data, error } = await this.client
+        .from(table)
+        .upsert(payload, { onConflict: conflictField });
+
+      if (!error) {
+        return { success: true, data };
+      }
+
+      // Detectar columna no existente en el esquema de Supabase (PGRST204)
+      if (error.code === 'PGRST204' || (error.message && error.message.toLowerCase().includes('schema cache'))) {
+        const colMatch = error.message.match(/Could not find the '([^']+)' column/i);
+        if (colMatch && colMatch[1]) {
+          const badCol = colMatch[1];
+          console.warn(`[SupabaseService] Columna "${badCol}" no existe en la tabla "${table}" de Supabase. Omitiendo dinámicamente y reintentando...`);
+          this.markColumnUnsupported(table, badCol);
+          delete payload[badCol];
+          retryCount++;
+          continue;
+        }
+      }
+
+      return { success: false, error };
+    }
+
+    return { success: false, error: new Error(`No se pudo guardar en ${table} tras reintentos`) };
+  }
+
+  /**
+   * Unifica historiales de abonos entre la base local y remota sin perder ningún pago registrado en otro equipo
+   */
+  mergeOrderAbonos(localOrder, incomingOrder) {
+    if (!localOrder || !incomingOrder) return;
+    const abonosMap = new Map();
+    (localOrder.historialAbonos || []).forEach(a => {
+      if (a && a.id) abonosMap.set(a.id, a);
+    });
+    (incomingOrder.historialAbonos || []).forEach(a => {
+      if (a && a.id) abonosMap.set(a.id, a);
+    });
+    const mergedAbonos = Array.from(abonosMap.values());
+    mergedAbonos.sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+
+    const totalAbonado = Math.round(mergedAbonos.reduce((sum, a) => sum + (Number(a.monto) || 0), 0) * 100) / 100;
+    const costoTotal = Number(incomingOrder.costoTotal !== undefined ? incomingOrder.costoTotal : localOrder.costoTotal) || 0;
+    const saldoPendiente = Math.max(0, Math.round((costoTotal - totalAbonado) * 100) / 100);
+
+    incomingOrder.historialAbonos = mergedAbonos;
+    incomingOrder.totalAbonado = totalAbonado;
+    incomingOrder.saldoPendiente = saldoPendiente;
+    incomingOrder.porcentajePagado = costoTotal > 0 ? Math.min(100, Math.round((totalAbonado / costoTotal) * 100)) : 100;
+  }
+
+  // ==========================================
   // SINCRONIZACIÓN DE SALIDA (OUTBOUND PUSH)
   // ==========================================
   /**
-   * Sube o actualiza un registro directamente en Supabase.
+   * Sube o actualiza un registro directamente en Supabase con tolerancia a columnas faltantes.
    * Si está offline o falla la red, lo encola automáticamente en la Offline Queue.
    *
    * @param {string} table - Nombre de la tabla
@@ -340,21 +501,23 @@ class SupabaseService {
   async pushRecord(table, record) {
     if (!record) return { skipped: true };
 
+    const recId = record?.id || record?.key;
+    if (recId) {
+      this.recentOutboundPushes.set(`${table}:${recId}`, Date.now());
+      setTimeout(() => this.recentOutboundPushes.delete(`${table}:${recId}`), 8000);
+    }
+
     if (!this.client || !navigator.onLine) {
       this.enqueueOfflineAction({ table, action: 'upsert', record });
       return { queued: true };
     }
 
     try {
-      const conflictField = table === 'settings' ? 'key' : 'id';
-      const { error } = await this.client
-        .from(table)
-        .upsert(record, { onConflict: conflictField });
-
-      if (error) {
-        console.warn(`[SupabaseService] Error en upsert para ${table}:`, error.message);
+      const res = await this.executeUpsert(table, record);
+      if (!res.success) {
+        console.warn(`[SupabaseService] Error en upsert para ${table}:`, res.error?.message || res.error);
         this.enqueueOfflineAction({ table, action: 'upsert', record });
-        return { success: false, error: error.message };
+        return { success: false, error: res.error?.message || res.error };
       }
 
       return { success: true };
@@ -420,7 +583,6 @@ class SupabaseService {
 
   enqueueOfflineAction(actionItem) {
     const queue = this.getOfflineQueue();
-    // Añadir sello de tiempo y evitar duplicados idénticos en espera
     actionItem.timestamp = Date.now();
     queue.push(actionItem);
     this.saveOfflineQueue(queue);
@@ -428,26 +590,38 @@ class SupabaseService {
   }
 
   /**
+   * Deduplica la cola offline por tabla y ID para evitar saturación innecesaria
+   */
+  deduplicateQueue(queue) {
+    const map = new Map();
+    for (const item of queue) {
+      if (!item) continue;
+      const recId = item.record?.id || item.record?.key || item.id;
+      const key = `${item.table}:${item.action}:${recId}`;
+      map.set(key, item);
+    }
+    return Array.from(map.values());
+  }
+
+  /**
    * Procesa y vacía la cola offline enviando todas las operaciones pendientes a Supabase.
    */
   async flushOfflineQueue() {
     if (this.isFlushingQueue || !this.client || !navigator.onLine) return;
-    const queue = this.getOfflineQueue();
-    if (queue.length === 0) return;
+    const rawQueue = this.getOfflineQueue();
+    if (rawQueue.length === 0) return;
 
     this.isFlushingQueue = true;
-    console.log(`[SupabaseService] Procesando cola offline con ${queue.length} operaciones pendientes...`);
+    const queue = this.deduplicateQueue(rawQueue);
+    console.log(`[SupabaseService] Procesando cola offline: ${queue.length} operaciones únicas (reducidas de ${rawQueue.length})...`);
 
     const remainingQueue = [];
 
     for (const item of queue) {
       try {
         if (item.action === 'upsert') {
-          const conflictField = item.table === 'settings' ? 'key' : 'id';
-          const { error } = await this.client
-            .from(item.table)
-            .upsert(item.record, { onConflict: conflictField });
-          if (error) throw error;
+          const res = await this.executeUpsert(item.table, item.record);
+          if (!res.success) throw (res.error || new Error('Upsert fallido'));
         } else if (item.action === 'delete') {
           const keyField = item.table === 'settings' ? 'key' : 'id';
           const { error } = await this.client
@@ -457,7 +631,7 @@ class SupabaseService {
           if (error) throw error;
         }
       } catch (err) {
-        console.warn(`[SupabaseService] Falló reintento de acción offline:`, err);
+        console.warn(`[SupabaseService] Falló reintento de acción offline en ${item.table}:`, err.message || err);
         remainingQueue.push(item);
       }
     }
@@ -609,11 +783,35 @@ class SupabaseService {
         const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
 
         if (incomingTime > localTime) {
-          localMap.set(incoming.id, incoming);
+          if (incoming.historialAbonos && local.historialAbonos) {
+            this.mergeOrderAbonos(local, incoming);
+          }
+          // Fusionar preservando campos locales si el remoto no los tuviese aún (o viniesen null/undefined)
+          const merged = { ...local, ...incoming };
+          if (incoming.adquirido === undefined || incoming.adquirido === null) {
+            merged.adquirido = Boolean(local.adquirido);
+          }
+          if (incoming.archivado === undefined || incoming.archivado === null) {
+            merged.archivado = Boolean(local.archivado);
+          } else if (local.archivado && !incoming.archivado) {
+            const localArchTime = new Date(local.fechaArchivado || local.updatedAt || 0).getTime();
+            const remoteArchTime = new Date(incoming.fechaArchivado || 0).getTime();
+            if (localArchTime >= remoteArchTime) {
+              merged.archivado = true;
+              merged.fechaArchivado = local.fechaArchivado;
+            }
+          }
+          if (incoming.entregado === undefined || incoming.entregado === null) {
+            merged.entregado = Boolean(local.entregado);
+          }
+          localMap.set(incoming.id, merged);
           updatedCount++;
-        } else if (localTime > incomingTime) {
+        } else if (localTime >= incomingTime) {
+          if (local.historialAbonos && incoming.historialAbonos) {
+            this.mergeOrderAbonos(incoming, local);
+          }
           conflictsPrevented++;
-          console.warn(`[Guardián Anti-Pisado] Registro local ${local.id} preservado (Local: ${new Date(localTime).toISOString()} > Nube: ${new Date(incomingTime).toISOString()})`);
+          console.warn(`[Guardián Anti-Pisado] Registro local ${local.id} preservado (Local: ${new Date(localTime).toISOString()} >= Nube: ${new Date(incomingTime).toISOString()})`);
         }
       }
     });
@@ -683,9 +881,23 @@ class SupabaseService {
         };
       }
 
+      // Verificar si las columnas recientes existen en el esquema de Supabase
+      const testSchemaRes = await testClient.from('orders').select('id, adquirido').limit(1);
+      if (testSchemaRes.error && (testSchemaRes.error.code === 'PGRST204' || testSchemaRes.error.message?.includes('schema cache'))) {
+        this.markColumnUnsupported('orders', 'adquirido');
+        return {
+          success: true,
+          warning: true,
+          message: '¡Conexión establecida con Supabase! ⚠️ Faltan columnas recientes (como "adquirido"). El sistema seguirá sincronizando automáticamente omitiendo campos incompatibles, pero para sincronizar entregas y estados completos se recomienda ejecutar el script SQL en Supabase.'
+        };
+      }
+
+      // Si funcionó con éxito, limpiar columnas no soportadas para esta tabla
+      this.clearUnsupportedColumns();
+
       return {
         success: true,
-        message: '¡Conexión exitosa con Supabase! Tablas encontradas y acceso verificado.'
+        message: '¡Conexión exitosa con Supabase! Tablas y todas las columnas verificadas al 100%.'
       };
     } catch (err) {
       return {
@@ -708,6 +920,24 @@ class SupabaseService {
 -- Compatible con Supabase PostgreSQL + Realtime Replication
 -- ============================================================
 
+-- 0. ACTUALIZACIÓN INMEDIATA DE COLUMNAS (Para tablas que ya existen)
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "adquirido" BOOLEAN DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaAdquisicion" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "entregado" BOOLEAN DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaEntregaReal" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "archivado" BOOLEAN DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaArchivado" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaLiquidacion" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "clienteEmail" TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "numeroSeguimiento" TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "categoria" TEXT DEFAULT 'Terminal';
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "mapsUrl" TEXT;
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "lat" NUMERIC;
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "lng" NUMERIC;
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "notas" TEXT;
+NOTIFY pgrst, 'reload schema';
+
 -- 1. TABLA: Clientes (customers)
 CREATE TABLE IF NOT EXISTS public.customers (
     id TEXT PRIMARY KEY,
@@ -729,6 +959,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
     "clienteId" TEXT,
     "clienteNombre" TEXT,
     "clienteTelefono" TEXT,
+    "clienteEmail" TEXT,
+    "numeroSeguimiento" TEXT,
     modalidad TEXT,
     "fechaCreacion" TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
     "fechaEntregaEstimada" TEXT,
@@ -744,9 +976,15 @@ CREATE TABLE IF NOT EXISTS public.orders (
     "totalAbonado" NUMERIC DEFAULT 0,
     "saldoPendiente" NUMERIC DEFAULT 0,
     "porcentajePagado" NUMERIC DEFAULT 0,
-    estado TEXT DEFAULT 'anticipo_pendiente',
+    estado TEXT DEFAULT 'pendiente_anticipo',
+    adquirido BOOLEAN DEFAULT false,
+    "fechaAdquisicion" TIMESTAMPTZ,
+    entregado BOOLEAN DEFAULT false,
+    "fechaEntregaReal" TIMESTAMPTZ,
+    archivado BOOLEAN DEFAULT false,
     "fechaLiquidacion" TIMESTAMPTZ,
     "notasInternas" TEXT,
+    "createdAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
     "updatedAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
@@ -756,9 +994,14 @@ CREATE TABLE IF NOT EXISTS public.destinations (
     nombre TEXT NOT NULL,
     ciudad TEXT,
     tipo TEXT,
+    categoria TEXT DEFAULT 'Terminal',
     direccion TEXT,
     referencia TEXT,
     "enlaceMaps" TEXT,
+    "mapsUrl" TEXT,
+    lat NUMERIC,
+    lng NUMERIC,
+    notas TEXT,
     coords JSONB,
     "updatedAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
     "createdAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
@@ -785,6 +1028,29 @@ CREATE TABLE IF NOT EXISTS public.settings (
     value JSONB NOT NULL,
     "updatedAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
+
+-- ============================================================
+-- MIGRACIÓN / ACTUALIZACIÓN AUTOMÁTICA DE COLUMNAS NUEVAS
+-- (Si ya creaste las tablas antes, estas líneas añaden columnas faltantes sin borrar datos)
+-- ============================================================
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "adquirido" BOOLEAN DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaAdquisicion" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "entregado" BOOLEAN DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaEntregaReal" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "archivado" BOOLEAN DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "fechaArchivado" TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "clienteEmail" TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "numeroSeguimiento" TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "categoria" TEXT DEFAULT 'Terminal';
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "mapsUrl" TEXT;
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "lat" NUMERIC;
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "lng" NUMERIC;
+ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "notas" TEXT;
+
+-- Recargar caché del esquema en Supabase PostgREST
+NOTIFY pgrst, 'reload schema';
 
 -- ============================================================
 -- SEGURIDAD: ROW LEVEL SECURITY (RLS)

@@ -16,22 +16,32 @@ class OrderService {
   // Obtener todos los pedidos
   async getAllOrders() {
     const orders = await storageService.getAll('orders');
-    return orders.map(o => ({
-      ...o,
-      adquirido: Boolean(o.adquirido),
-      entregado: Boolean(o.entregado || o.estado === 'entregado'),
-      archivado: Boolean(o.archivado)
-    })).sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
+    const uniqueMap = new Map();
+    orders.forEach(o => {
+      if (!o || !o.id) return;
+      const isAcquired = Boolean(o.adquirido);
+      // Regla de negocio estricta: Si no está adquirido, NO puede estar entregado
+      const isDelivered = isAcquired ? (o.entregado !== undefined ? Boolean(o.entregado) : Boolean(o.estado === 'entregado')) : false;
+      uniqueMap.set(o.id, {
+        ...o,
+        adquirido: isAcquired,
+        entregado: isDelivered,
+        archivado: Boolean(o.archivado)
+      });
+    });
+    return Array.from(uniqueMap.values()).sort((a, b) => new Date(b.fechaCreacion || 0) - new Date(a.fechaCreacion || 0));
   }
 
   // Obtener un pedido por ID
   async getOrderById(orderId) {
     const order = await storageService.getById('orders', orderId);
     if (!order) return null;
+    const isAcquired = Boolean(order.adquirido);
+    const isDelivered = isAcquired ? (order.entregado !== undefined ? Boolean(order.entregado) : Boolean(order.estado === 'entregado')) : false;
     return {
       ...order,
-      adquirido: Boolean(order.adquirido),
-      entregado: Boolean(order.entregado || order.estado === 'entregado'),
+      adquirido: isAcquired,
+      entregado: isDelivered,
       archivado: Boolean(order.archivado)
     };
   }
@@ -219,8 +229,28 @@ class OrderService {
     const order = await this.getOrderById(orderId);
     if (!order) throw new Error('Pedido no encontrado');
     const now = new Date().toISOString();
+
     order.adquirido = !order.adquirido;
     order.fechaAdquisicion = order.adquirido ? now : null;
+
+    // Si se desmarca la adquisición (por error o rectificación):
+    // 1. También se desmarca la entrega física
+    // 2. Si estaba archivado, se retira de archivados
+    // 3. Se restablece el estado financiero correspondiente
+    if (!order.adquirido) {
+      order.entregado = false;
+      order.fechaEntregaReal = null;
+      order.archivado = false;
+      delete order.fechaArchivado;
+      if (order.saldoPendiente === 0 && order.costoTotal > 0) {
+        order.estado = 'liquidado_total';
+      } else if (order.totalAbonado >= order.montoAnticipoCalculado && order.totalAbonado > 0) {
+        order.estado = 'anticipo_pagado';
+      } else {
+        order.estado = 'pendiente_anticipo';
+      }
+    }
+
     order.updatedAt = now;
     await storageService.put('orders', order);
     supabaseService.pushRecord('orders', order).catch(() => {});
@@ -231,8 +261,16 @@ class OrderService {
   async toggleOrderDelivered(orderId) {
     const order = await this.getOrderById(orderId);
     if (!order) throw new Error('Pedido no encontrado');
+
+    const willBeDelivered = !order.entregado;
+
+    // Regla de negocio requerida: Para poderse entregar primero se debe adquirir el producto y marcarse
+    if (willBeDelivered && !order.adquirido) {
+      throw new Error('No se puede entregar un encargo cuyos productos no han sido adquiridos.');
+    }
+
     const now = new Date().toISOString();
-    order.entregado = !order.entregado;
+    order.entregado = willBeDelivered;
     order.fechaEntregaReal = order.entregado ? now : null;
     
     // Si se entrega, se asegura que los productos fueron adquiridos
@@ -267,6 +305,7 @@ class OrderService {
     if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
     order.estado = 'entregado';
     order.archivado = true;
+    order.fechaArchivado = now;
     order.updatedAt = now;
     await storageService.put('orders', order);
     supabaseService.pushRecord('orders', order).catch(() => {});
@@ -280,6 +319,12 @@ class OrderService {
     const now = new Date().toISOString();
     order.archivado = true;
     order.fechaArchivado = now;
+    // Si se archiva, asegurar que esté marcado como adquirido y entregado
+    order.adquirido = true;
+    if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
+    order.entregado = true;
+    if (!order.fechaEntregaReal) order.fechaEntregaReal = now;
+    order.estado = 'entregado';
     order.updatedAt = now;
     await storageService.put('orders', order);
     supabaseService.pushRecord('orders', order).catch(() => {});
@@ -325,6 +370,71 @@ class OrderService {
     return storageService.delete('orders', orderId);
   }
 
+  // Detecta y limpia automáticamente pedidos duplicados fantasmas generados por desincronizaciones
+  async cleanDuplicateGhostOrders() {
+    const orders = await storageService.getAll('orders');
+    if (!orders || orders.length <= 1) return [];
+
+    const mapByContent = new Map();
+    const duplicatesToDelete = [];
+
+    for (const order of orders) {
+      if (!order || !order.id) continue;
+      const clientName = (order.clienteNombre || '').trim().toLowerCase();
+      const total = Number(order.costoTotal || 0).toFixed(2);
+      const itemsSig = (order.items || [])
+        .map(i => `${(i.descripcion || '').trim().toLowerCase()}_${i.cantidad}_${Number(i.precioUnitario || 0).toFixed(2)}`)
+        .sort()
+        .join(';;');
+
+      const sig = `${clientName}__${total}__${itemsSig}`;
+      if (!clientName && total === '0.00') continue;
+
+      if (!mapByContent.has(sig)) {
+        mapByContent.set(sig, order);
+      } else {
+        const existing = mapByContent.get(sig);
+        let toKeep = existing;
+        let toDelete = order;
+
+        // Criterio de preservación inteligente:
+        // 1. Si uno está archivado y el otro no, conservar el archivado
+        if (order.archivado && !existing.archivado) {
+          toKeep = order;
+          toDelete = existing;
+          mapByContent.set(sig, order);
+        } else if (!order.archivado && existing.archivado) {
+          toKeep = existing;
+          toDelete = order;
+        } else {
+          // 2. Si ambos están en igual estado, conservar el que tenga más historial de abonos o sea más reciente
+          const orderAbonos = (order.historialAbonos || []).length;
+          const existingAbonos = (existing.historialAbonos || []).length;
+          if (orderAbonos > existingAbonos) {
+            toKeep = order;
+            toDelete = existing;
+            mapByContent.set(sig, order);
+          } else {
+            toKeep = existing;
+            toDelete = order;
+          }
+        }
+
+        duplicatesToDelete.push(toDelete.id);
+      }
+    }
+
+    if (duplicatesToDelete.length > 0) {
+      console.warn(`[OrderService] Limpiando ${duplicatesToDelete.length} pedidos fantasmas duplicados:`, duplicatesToDelete);
+      for (const id of duplicatesToDelete) {
+        await storageService.delete('orders', id);
+        supabaseService.pushDelete('orders', id).catch(() => {});
+      }
+    }
+
+    return duplicatesToDelete;
+  }
+
   // Búsqueda inteligente: filtra por cliente, por producto encargado o por código
   async searchOrdersAndProducts(query) {
     const orders = await this.getAllOrders();
@@ -356,31 +466,32 @@ class OrderService {
     if (!order) return false;
     if (order.archivado) return true;
     const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
+    const isDelivered = Boolean(order.entregado);
     const isAcquired = Boolean(order.adquirido);
-    const isDelivered = Boolean(order.entregado || order.estado === 'entregado');
     return isPaid && isAcquired && isDelivered;
   }
 
   // Estadísticas para el Dashboard
   async getDashboardMetrics() {
     const orders = await this.getAllOrders();
-    // Un pedido va a finalizados si cumple las 3 condiciones o está archivado
-    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o));
+    // Un encargo está activo en el tablero mientras no esté cancelado ni archivado
+    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !o.archivado);
     const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && this.isOrderFinalized(o));
 
-    let totalPorCobrar = 0;       // Saldo deudor global acumulado
-    let totalRecaudado = 0;        // Total recaudado en abonos y anticipos
-    let totalFacturado = 0;        // Valor total de todos los pedidos no cancelados
+    let totalPorCobrar = 0;       // Saldo deudor global acumulado de encargos activos
+    let totalRecaudado = 0;        // Total recaudado de encargos activos (deja de sumar al archivarse)
+    let totalFacturado = 0;        // Valor total de encargos activos
     let pendientesAnticipoCount = 0;
     let apartadosEnAbonosCount = 0;
     let liquidadosCount = 0;
-    let entregadosCount = orders.filter(o => o.entregado).length;
-    let adquiridosCount = orders.filter(o => o.adquirido).length;
+    let entregadosCount = activeOrders.filter(o => o.entregado).length;
+    let adquiridosCount = activeOrders.filter(o => o.adquirido).length;
 
     const destinosMap = {};
 
-    // Métricas globales financieras
-    orders.filter(o => o.estado !== 'cancelado').forEach(o => {
+    // Métricas del tablero principal: Se calculan sobre encargos activos.
+    // Si ya se pagó en su totalidad, se entregó y se marcó archivar, deja de sumar en el tablero principal en recaudado.
+    activeOrders.forEach(o => {
       totalRecaudado += (o.totalAbonado || 0);
       totalFacturado += (o.costoTotal || 0);
       totalPorCobrar += (o.saldoPendiente || 0);

@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css?v=1.6.5">
+  <link rel="stylesheet" href="index.css?v=1.7.4">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
 </head>
 <body>
@@ -17,10 +17,15 @@
   <!-- ======================================================== -->
   <div id="appLoginOverlay" class="login-fullscreen-overlay" style="display: none;">
     <div class="login-card-container">
-      <!-- Botón de ajuste de tamaño / modo compacto para móviles -->
-      <button type="button" id="btnToggleLoginCompact" class="btn-login-adjust" onclick="window.app.toggleLoginCompactMode()" title="Ajustar tamaño de pantalla / Compactar">
-        ↕️ Ajustar
-      </button>
+      <!-- Acciones rápidas de cabecera: Actualizaciones y Modo Compacto -->
+      <div class="login-top-actions">
+        <button type="button" id="btnCheckLoginUpdates" class="btn-login-adjust" onclick="window.app.checkForAppUpdates(true)" title="Buscar actualizaciones del sistema en la nube">
+          🔄 Actualizar
+        </button>
+        <button type="button" id="btnToggleLoginCompact" class="btn-login-adjust" onclick="window.app.toggleLoginCompactMode()" title="Ajustar tamaño de pantalla / Compactar">
+          ↕️ Ajustar
+        </button>
+      </div>
 
       <div class="login-brand-header">
         <div class="login-app-icon">📦</div>
@@ -206,6 +211,10 @@
 
         <button id="themeToggleBtn" class="btn btn-icon" title="Cambiar Tema (Oscuro/Claro)">
           🌙
+        </button>
+
+        <button id="btnForceReload" class="btn btn-icon" title="Forzar actualización y limpiar caché del navegador" onclick="window.app.forcePurgeAndReload()">
+          🔄
         </button>
 
         <button class="btn btn-primary" onclick="window.app.openNewOrderModal()" title="Registrar un nuevo encargo">
@@ -550,6 +559,7 @@
                 <button type="button" id="btnManualSyncNow" class="btn btn-secondary">🔄 Sincronizar con la Nube Ahora</button>
                 <button type="button" id="btnDownloadAndRestart" class="btn btn-secondary">📥 Descargar Base Completa y Reiniciar</button>
                 <button type="button" id="btnShowSupabaseSql" class="btn btn-secondary">📋 Ver Script SQL para Supabase</button>
+                <button type="button" id="btnCheckAppUpdates" class="btn btn-secondary" onclick="window.app.checkForAppUpdates(true)">🚀 Buscar Actualizaciones del Sistema</button>
               </div>
 
               <!-- Caja de resultados y diagnóstico en vivo para Supabase -->
@@ -1026,6 +1036,6 @@
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js?v=1.6.5"></script>
+  <script type="module" src="src/app.js?v=1.7.4"></script>
 </body>
 </html>

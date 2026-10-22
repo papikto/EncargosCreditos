@@ -39,6 +39,9 @@ class App {
     // 4. Inicializar sincronizador y guardián anti-colisión
     this.initSync();
 
+    // 4.5. Limpieza automática de posibles pedidos duplicados fantasmas
+    await orderService.cleanDuplicateGhostOrders().catch(console.error);
+
     // 5. Destinos por defecto solo si la base está totalmente vacía
     await destinationService.seedDefaultDestinationsIfEmpty();
 
@@ -65,20 +68,31 @@ class App {
 
     navigator.serviceWorker.register('./sw.js').then((registration) => {
       console.log('[App] Service Worker registrado correctamente:', registration.scope);
+      this.swRegistration = registration;
 
-      // Si ya hay una nueva versión en espera
-      if (registration.waiting) {
-        this.showUpdateBanner(registration.waiting);
+      // 1. Forzar consulta de actualización inmediata si el dispositivo tiene conexión a internet
+      if (navigator.onLine) {
+        registration.update().catch((err) => {
+          console.log('[App] Comprobación inicial de actualización:', err);
+        });
       }
 
+      // 2. Si ya hay un Service Worker esperando activación
+      if (registration.waiting) {
+        this.handlePendingUpdate(registration.waiting);
+      }
+
+      // 3. Monitorear si se encuentra un nuevo Service Worker en el servidor
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
 
         newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // Se detectó una nueva versión lista
-            this.showUpdateBanner(newWorker);
+          if (newWorker.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
+              // Nueva versión descargada y lista
+              this.handlePendingUpdate(newWorker);
+            }
           }
         });
       });
@@ -86,7 +100,22 @@ class App {
       console.warn('[App] Error al registrar Service Worker:', err);
     });
 
-    // Cuando el nuevo service worker toma el control, recargar suavemente
+    // 4. Consultar actualizaciones al recuperar conexión a internet
+    window.addEventListener('online', () => {
+      console.log('[App] Conexión a internet reanudada: verificando actualizaciones...');
+      if (this.swRegistration) {
+        this.swRegistration.update().catch(() => {});
+      }
+    });
+
+    // 5. Consultar actualizaciones cuando el usuario regresa a la aplicación o pestaña
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navigator.onLine && this.swRegistration) {
+        this.swRegistration.update().catch(() => {});
+      }
+    });
+
+    // 6. Cuando el nuevo Service Worker toma el control, recargar suavemente
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) {
@@ -94,6 +123,26 @@ class App {
         window.location.reload();
       }
     });
+  }
+
+  handlePendingUpdate(worker) {
+    this.waitingWorker = worker;
+
+    // Si el usuario aún no ha iniciado sesión o el dispositivo está en configuración inicial,
+    // aplicar la actualización automáticamente de inmediato para que siempre vea la última versión
+    if (!authService.isAuthenticated()) {
+      console.log('[App] Dispositivo sin sesión o en configuración inicial: aplicando actualización automáticamente...');
+      const statusBox = document.getElementById('initSupabaseStatusBox');
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.innerHTML = '🔄 <strong>Nueva versión detectada:</strong> Actualizando aplicación automáticamente...';
+      }
+      worker.postMessage({ type: 'SKIP_WAITING' });
+      return;
+    }
+
+    // Si ya tiene sesión activa y está trabajando, mostrar el banner superior
+    this.showUpdateBanner(worker);
   }
 
   showUpdateBanner(worker) {
@@ -108,7 +157,62 @@ class App {
     if (this.waitingWorker) {
       this.waitingWorker.postMessage({ type: 'SKIP_WAITING' });
     } else {
-      window.location.reload();
+      this.forcePurgeAndReload();
+    }
+  }
+
+  // Forzar actualización total eliminando cachés locales obsoletas y service workers
+  async forcePurgeAndReload() {
+    try {
+      localStorage.removeItem('supabase_unsupported_columns_v1');
+      await orderService.cleanDuplicateGhostOrders().catch(() => {});
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const cacheKeys = await caches.keys();
+        for (const key of cacheKeys) {
+          await caches.delete(key);
+        }
+      }
+    } catch (e) {
+      console.warn('[App] Error purgando cachés:', e);
+    }
+    const cleanUrl = window.location.origin + window.location.pathname + '?t=' + Date.now();
+    window.location.replace(cleanUrl);
+  }
+
+  async checkForAppUpdates(manual = false) {
+    if (!('serviceWorker' in navigator)) {
+      if (manual) this.showToast('Tu navegador no soporta Service Workers offline.', 'warning');
+      return;
+    }
+
+    if (!navigator.onLine) {
+      if (manual) this.showToast('No hay conexión a internet activa para buscar actualizaciones.', 'warning');
+      return;
+    }
+
+    if (manual) {
+      this.showToast('Buscando actualizaciones en el servidor...', 'info');
+    }
+
+    try {
+      const reg = this.swRegistration || await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        if (manual && !reg.waiting && !reg.installing) {
+          this.showToast('✅ Ya cuentas con la versión más reciente instalada.', 'success');
+        }
+      } else {
+        if (manual) this.showToast('Service Worker no inicializado aún.', 'info');
+      }
+    } catch (err) {
+      console.warn('[App] Error al buscar actualización:', err);
+      if (manual) this.showToast('Error al comprobar versión: ' + err.message, 'danger');
     }
   }
 
@@ -287,8 +391,8 @@ class App {
     if (!order) return false;
     if (order.archivado) return true;
     const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
+    const isDelivered = Boolean(order.entregado);
     const isAcquired = Boolean(order.adquirido);
-    const isDelivered = Boolean(order.entregado || order.estado === 'entregado');
     return isPaid && isAcquired && isDelivered;
   }
 
@@ -305,9 +409,19 @@ class App {
       destBadge.textContent = `${dests.length}`;
     }
 
-    // Actualizar contadores de navegación y pestañas segmentadas
+    // Actualizar tarjetas de métricas del Dashboard en tiempo real
+    const dashDebt = document.getElementById('dashTotalDebt');
+    if (dashDebt) dashDebt.textContent = `${currency} ${metrics.totalPorCobrar.toFixed(2)}`;
+    const dashCollected = document.getElementById('dashTotalCollected');
+    if (dashCollected) dashCollected.textContent = `${currency} ${metrics.totalRecaudado.toFixed(2)}`;
+    const dashActive = document.getElementById('dashActiveOrders');
+    if (dashActive) dashActive.textContent = `${metrics.totalPedidos}`;
+    const dashPending = document.getElementById('dashPendingDeposit');
+    if (dashPending) dashPending.textContent = `${metrics.pendientesAnticipoCount}`;
+
+    // Actualizar contadores de navegación y pestañas segmentadas (excluyendo archivados de activos)
     const orders = await orderService.getAllOrders();
-    const activeCount = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o)).length;
+    const activeCount = orders.filter(o => o.estado !== 'cancelado' && !o.archivado).length;
     const finCount = orders.filter(o => o.estado !== 'cancelado' && this.isOrderFinalized(o)).length;
 
     const navActiveBadge = document.getElementById('ordersActiveCountBadge');
@@ -428,8 +542,8 @@ class App {
     const cityFilter = document.getElementById('orderCityFilter')?.value || 'all';
     const statusFilter = document.getElementById('orderStatusFilter')?.value || 'all';
 
-    // Un pedido va a finalizados si cumple las 3 condiciones (100% pagado, adquirido y entregado) o está archivado
-    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o));
+    // Un encargo está activo en el tablero mientras no esté archivado
+    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !o.archivado);
     const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && this.isOrderFinalized(o));
 
     // Actualizar contadores
@@ -491,6 +605,8 @@ class App {
       else if (currentStatusVal === 'entregado_con_deuda') filtered = filtered.filter(o => o.entregado && o.saldoPendiente > 0);
       else if (currentStatusVal === 'cancelado_total') filtered = filtered.filter(o => o.saldoPendiente === 0);
       else if (currentStatusVal === 'pendiente_anticipo') filtered = filtered.filter(o => o.totalAbonado === 0);
+      else if (currentStatusVal === 'archivados') filtered = filtered.filter(o => o.archivado);
+      else if (currentStatusVal === 'por_archivar') filtered = filtered.filter(o => !o.archivado);
       else filtered = filtered.filter(o => o.estado === currentStatusVal);
     }
 
@@ -561,6 +677,8 @@ class App {
     } else if (group === 'finalizados') {
       options = `
         <option value="all">Todos los finalizados y entregados</option>
+        <option value="por_archivar">⏳ Pendientes por Archivar</option>
+        <option value="archivados">📁 Ya Archivados en Historial</option>
         <option value="entregado">📦 Entregados</option>
       `;
     } else {
@@ -614,8 +732,8 @@ class App {
 
     // Estados independientes: Financiero y Logístico
     const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
+    const isDelivered = Boolean(order.entregado);
     const isAcquired = Boolean(order.adquirido);
-    const isDelivered = Boolean(order.entregado || order.estado === 'entregado');
     const isArchived = Boolean(order.archivado);
     const isFinalized = (isPaid && isAcquired && isDelivered) || isArchived;
 
@@ -757,16 +875,24 @@ class App {
             <!-- 3. Botón: Productos Adquiridos -->
             <button class="btn ${isAcquired ? 'btn-acquired-active' : 'btn-acquired'}" 
                     onclick="window.app.toggleOrderAcquired('${order.id}')" 
-                    title="${isAcquired ? 'Productos ya adquiridos. Clic para cambiar.' : 'Marcar que compraste o conseguiste estos productos'}">
+                    title="${isAcquired ? 'Productos marcados como adquiridos. Clic para desmarcar.' : 'Marcar que compraste o conseguiste estos productos'}">
               ${isAcquired ? '✅ Productos Adquiridos' : '🛍️ Productos Adquiridos'}
             </button>
 
-            <!-- 4. Botón: Producto Entregado -->
-            <button class="btn ${isDelivered ? 'btn-delivered-active' : 'btn-delivered'}" 
-                    onclick="window.app.toggleOrderDelivered('${order.id}')" 
-                    title="${isDelivered ? 'Producto entregado al cliente. Clic para desmarcar.' : 'Marcar que el cliente ya recibió el producto físicamente'}">
-              ${isDelivered ? '✅ Producto Entregado' : '📦 Producto Entregado'}
-            </button>
+            <!-- 4. Botón: Producto Entregado (Requiere haber sido adquirido primero) -->
+            ${!isAcquired && !isDelivered ? `
+              <button class="btn btn-delivered btn-delivered-locked" 
+                      onclick="window.app.toggleOrderDelivered('${order.id}')" 
+                      title="⚠️ Bloqueado: Primero debes marcar los productos como adquiridos (🛍️ Productos Adquiridos) antes de poder realizar la entrega física">
+                🔒 Producto Entregado
+              </button>
+            ` : `
+              <button class="btn ${isDelivered ? 'btn-delivered-active' : 'btn-delivered'}" 
+                      onclick="window.app.toggleOrderDelivered('${order.id}')" 
+                      title="${isDelivered ? 'Producto entregado al cliente. Clic para desmarcar.' : 'Marcar que el cliente ya recibió el producto físicamente'}">
+                ${isDelivered ? '✅ Producto Entregado' : '📦 Producto Entregado'}
+              </button>
+            `}
           </div>
 
           <!-- Comprobantes y Acciones de Salida -->
@@ -780,7 +906,7 @@ class App {
             <button class="btn btn-secondary btn-icon" title="Enviar por Email" onclick="window.app.sendEmail('${order.id}')">
               ✉️
             </button>
-            ${isAdmin && isDelivered && isPaid && !isArchived ? `
+            ${isAdmin && isDelivered && !isArchived ? `
               <button class="btn btn-secondary btn-icon" title="Archivar pedido en Historial Finalizados (Admin)" onclick="window.app.archiveFinalizedOrder('${order.id}')" style="font-size: 0.85rem;">
                 📁
               </button>
@@ -794,18 +920,20 @@ class App {
         </div>
 
         <!-- Franja Exclusiva para Administrador en Pedidos Finalizados / Archivados -->
-        ${isAdmin && isFinalized ? `
-          <div class="admin-archive-strip">
+        ${isAdmin && (isFinalized || (isDelivered && isArchived)) ? `
+          <div class="admin-archive-strip ${isArchived ? 'strip-archived' : ''}">
             <span class="admin-strip-text">
-              🏁 ${isArchived ? '📁 Encargo Archivado en Historial' : '👑 Pedido Finalizado (Pagado 100%, Adquirido y Entregado)'}
+              ${isArchived 
+                ? '📁 <strong>Encargo Archivado en Historial</strong> (Ya no suma en recaudado del tablero)' 
+                : '👑 <strong>Pedido Finalizado</strong> (Pagado 100%, Adquirido y Entregado — Pendiente de archivar)'}
             </span>
             <div class="admin-archive-buttons" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
               ${!isArchived ? `
-                <button class="btn btn-archive" onclick="window.app.archiveFinalizedOrder('${order.id}')" title="Archivar pedido con sello de historial">
+                <button class="btn btn-archive" onclick="window.app.archiveFinalizedOrder('${order.id}')" title="Archivar pedido con sello de historial para que deje de sumar en recaudado activo">
                   📁 Archivar Encargo
                 </button>
               ` : `
-                <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.75rem;" onclick="window.app.unarchiveOrder('${order.id}')" title="Restaurar este pedido a la pantalla de pedidos activos">
+                <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.75rem;" onclick="window.app.unarchiveOrder('${order.id}')" title="Restaurar este pedido a la pantalla de pedidos activos y volver a sumar en recaudado">
                   ↩️ Restaurar a Activos
                 </button>
               `}
@@ -1891,12 +2019,12 @@ class App {
     try {
       const updated = await orderService.toggleOrderAcquired(orderId);
       if (updated.adquirido) {
-        this.showToast(`🛍️ ¡Productos de ${orderId} marcados como ADQUIRIDOS!`, 'success');
+        this.showToast(`🛍️ ¡Productos de ${orderId} marcados como ADQUIRIDOS! Ahora ya puedes realizar la entrega física.`, 'success');
       } else {
         this.showToast(`Encargo ${orderId} marcado como pendiente de adquisición`, 'info');
       }
       this.refreshCurrentView();
-      this.updateGlobalBadgeMetrics();
+      await this.updateGlobalBadgeMetrics();
     } catch (err) {
       alert('Error al actualizar adquisición: ' + err.message);
     }
@@ -1908,6 +2036,13 @@ class App {
     if (!order) return;
 
     const willBeDelivered = !order.entregado;
+
+    // Regla de negocio requerida: Para poderse entregar primero se debe adquirir el producto
+    if (willBeDelivered && !order.adquirido) {
+      this.showToast('⚠️ Para poder entregar este pedido, primero debes adquirir los productos y marcarlos como "🛍️ Productos Adquiridos".', 'warning');
+      return;
+    }
+
     if (willBeDelivered && order.saldoPendiente > 0) {
       const currency = this.appConfig?.empresa?.moneda || '$';
       const confirmDebt = confirm(
@@ -1940,15 +2075,24 @@ class App {
     const order = await orderService.getOrderById(orderId);
     if (!order) return;
 
-    const confirmArchive = confirm(
-      `¿Deseas archivar el encargo ${order.id} (${order.clienteNombre}) en el historial de Pedidos Finalizados?\n\n` +
-      `Se guardará en el historial y quedarán en pantalla únicamente los pedidos activos.`
-    );
-    if (!confirmArchive) return;
+    if (order.saldoPendiente > 0) {
+      const currency = this.appConfig?.empresa?.moneda || '$';
+      const confirmDebt = confirm(
+        `⚠️ ATENCIÓN: El encargo ${order.id} tiene un saldo pendiente de ${currency} ${order.saldoPendiente.toFixed(2)}.\n\n` +
+        `¿Confirmas archivar este encargo en el historial manteniendo el saldo deudor registrado? Dejará de sumar en el tablero principal activo.`
+      );
+      if (!confirmDebt) return;
+    } else {
+      const confirmArchive = confirm(
+        `¿Deseas archivar el encargo ${order.id} (${order.clienteNombre}) en el historial de Pedidos Finalizados?\n\n` +
+        `Al archivarlo, se cerrará en el historial y dejará de sumar en el total recaudado del tablero principal.`
+      );
+      if (!confirmArchive) return;
+    }
 
     try {
       await orderService.archiveFinalizedOrder(orderId);
-      this.showToast(`📁 Encargo ${orderId} archivado en historial.`);
+      this.showToast(`📁 Encargo ${orderId} archivado con éxito. Se descontó del recaudado activo del tablero.`, 'success');
       this.refreshCurrentView();
       await this.updateGlobalBadgeMetrics();
     } catch (err) {
@@ -2492,6 +2636,8 @@ class App {
       const banner = document.getElementById('appUpdateBanner');
       if (banner) banner.style.display = 'none';
     });
+    document.getElementById('btnCheckLoginUpdates')?.addEventListener('click', () => this.checkForAppUpdates(true));
+    document.getElementById('btnCheckAppUpdates')?.addEventListener('click', () => this.checkForAppUpdates(true));
 
     // Respaldos, Nube y Sincronización Manual
     document.getElementById('btnManualSyncNow')?.addEventListener('click', async () => {
