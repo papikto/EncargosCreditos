@@ -1009,7 +1009,7 @@ class App {
     document.getElementById('destMapsUrlInput').value = '';
     document.getElementById('destNotasInput').value = '';
     this.currentDestinationCoords = null;
-    document.getElementById('destinationModal').classList.add('active');
+    this.openModal('destinationModal');
   }
 
   async openEditDestinationModal(id) {
@@ -1026,7 +1026,7 @@ class App {
     document.getElementById('destNotasInput').value = d.notas || '';
     this.currentDestinationCoords = d.lat && d.lng ? { lat: d.lat, lng: d.lng } : null;
 
-    document.getElementById('destinationModal').classList.add('active');
+    this.openModal('destinationModal');
   }
 
   captureGPSForDestination() {
@@ -1153,6 +1153,26 @@ class App {
 
     const isSimulated = authService.isSimulatedDispatcher();
 
+    // Actualizar nombre y cargo debajo de Encargos & Apartados
+    const brandUserBox = document.getElementById('brandUserOperating');
+    const brandNameEl = document.getElementById('brandUserName');
+    const brandRoleEl = document.getElementById('brandUserRoleBadge');
+
+    if (brandUserBox) brandUserBox.style.display = 'flex';
+    if (brandNameEl) brandNameEl.textContent = user.nombre || user.usuario || 'Operando';
+    if (brandRoleEl) {
+      if (isSimulated) {
+        brandRoleEl.textContent = '🚚 Modo Ruta';
+        brandRoleEl.className = 'brand-user-role-badge dispatcher';
+      } else if (user.rol === 'admin') {
+        brandRoleEl.textContent = '👑 Administrador';
+        brandRoleEl.className = 'brand-user-role-badge admin';
+      } else {
+        brandRoleEl.textContent = '🚚 Despachador';
+        brandRoleEl.className = 'brand-user-role-badge dispatcher';
+      }
+    }
+
     if (avatarEl) avatarEl.textContent = isSimulated ? '🚚' : (user.avatar || (user.rol === 'admin' ? '👑' : '🚚'));
     if (nameEl) nameEl.textContent = user.nombre;
 
@@ -1238,11 +1258,11 @@ class App {
     const brandTag = document.querySelector('.brand-tag');
     if (brandTag && current) {
       if (authService.isSimulatedDispatcher()) {
-        brandTag.textContent = `v1.5.9 (Modo Ruta / Despacho)`;
+        brandTag.textContent = `v1.6.0 (Modo Ruta / Despacho)`;
       } else if (isAdmin) {
-        brandTag.textContent = `v1.5.9 (Administrador)`;
+        brandTag.textContent = `v1.6.0 (Administrador)`;
       } else {
-        brandTag.textContent = `v1.5.9 (Despachador)`;
+        brandTag.textContent = `v1.6.0 (Despachador)`;
       }
     }
   }
@@ -1484,7 +1504,7 @@ class App {
     document.getElementById('userPasswordInput').value = '';
     document.getElementById('userPhoneInput').value = '';
     document.getElementById('userEmailInput').value = '';
-    document.getElementById('userModal').classList.add('active');
+    this.openModal('userModal');
   }
 
   async openEditUserModal(id) {
@@ -1504,7 +1524,7 @@ class App {
     document.getElementById('userPasswordInput').value = u.password || '';
     document.getElementById('userPhoneInput').value = u.telefono || '';
     document.getElementById('userEmailInput').value = u.email || '';
-    document.getElementById('userModal').classList.add('active');
+    this.openModal('userModal');
   }
 
   async submitUserForm() {
@@ -1569,7 +1589,7 @@ class App {
     document.getElementById('modalPayMethod').value = 'Efectivo';
     document.getElementById('modalPayRef').value = '';
 
-    document.getElementById('paymentModal').classList.add('active');
+    this.openModal('paymentModal');
   }
 
   async submitAddPayment() {
@@ -1878,7 +1898,7 @@ class App {
       }
     }
 
-    document.getElementById('customerProfileModal').classList.add('active');
+    this.openModal('customerProfileModal');
   }
 
   // ==========================================
@@ -1924,7 +1944,7 @@ class App {
     `;
 
     this.calculateNewOrderTotals();
-    document.getElementById('newOrderModal').classList.add('active');
+    this.openModal('newOrderModal');
   }
 
   // Capturar coordenadas GPS del dispositivo para georreferenciar destino
@@ -2090,7 +2110,7 @@ class App {
     document.getElementById('newCustEmail').value = '';
     document.getElementById('newCustCity').value = '';
     document.getElementById('newCustAddress').value = '';
-    document.getElementById('newCustomerModal').classList.add('active');
+    this.openModal('newCustomerModal');
   }
 
   async submitNewCustomer() {
@@ -2137,12 +2157,18 @@ class App {
   // ==========================================
   openModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.add('active');
+    if (modal) {
+      modal.classList.add('active');
+      document.body.classList.add('modal-open');
+    }
   }
 
   closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) modal.classList.remove('active');
+    if (!document.querySelector('.modal-overlay.active')) {
+      document.body.classList.remove('modal-open');
+    }
   }
 
   refreshCurrentView() {

@@ -3,7 +3,7 @@
  * Manejo de modo Offline, Control de Versiones del App Shell y Actualizaciones Seguras.
  */
 
-const APP_VERSION = 'v1.5.9';
+const APP_VERSION = 'v1.6.2';
 const CACHE_NAME = `encargos-cache-${APP_VERSION}`;
 
 // Assets esenciales para funcionamiento 100% autónomo sin internet

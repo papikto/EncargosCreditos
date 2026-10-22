@@ -143,6 +143,50 @@ body {
   line-height: 1.2;
 }
 
+.brand-user-operating {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
+.operating-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseDot 1.8s infinite alternate;
+  flex-shrink: 0;
+}
+
+.brand-user-role-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.brand-user-role-badge.admin {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.brand-user-role-badge.dispatcher {
+  background: rgba(56, 189, 248, 0.15);
+  color: #0284c7;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
 .brand-tag {
   font-size: 0.7rem;
   color: var(--color-success);
@@ -1048,7 +1092,7 @@ body {
   inset: 0;
   background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(4px);
-  z-index: 100;
+  z-index: 9999;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1067,9 +1111,9 @@ body {
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .modal-header {
@@ -1078,6 +1122,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -1099,11 +1144,23 @@ body {
   color: var(--text-primary);
 }
 
+.modal-card > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modal-body {
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .modal-footer {
@@ -1112,6 +1169,7 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 /* Formularios */
@@ -1691,6 +1749,634 @@ body {
 .nav-user-role {
   font-size: 0.68rem;
   color: var(--text-muted);
+}
+
+/* ==========================================================================
+   OPTIMIZACIONES RESPONSIVAS PARA MÓVILES Y TABLETS
+   ========================================================================== */
+
+/* Botón Flotante Móvil (FAB) - Oculto por defecto en escritorio */
+.mobile-fab-btn {
+  display: none;
+}
+
+/* 1. TABLETS Y PANTALLAS MEDIANAS (<= 992px) */
+@media (max-width: 992px) {
+  .top-navbar {
+    padding: 0.65rem 1rem;
+    gap: 0.75rem;
+  }
+  
+  .navbar-search {
+    max-width: 300px;
+  }
+
+  .main-content {
+    padding: 1.25rem 1rem;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 2. MÓVILES Y PANTALLAS TÁCTILES (<= 768px) */
+@media (max-width: 768px) {
+  /* Bloqueo de scroll de fondo cuando hay un modal abierto */
+  body.modal-open {
+    overflow: hidden !important;
+    touch-action: none;
+  }
+
+  body.modal-open .mobile-fab-btn {
+    display: none !important;
+  }
+
+  /* Evitar auto-zoom molesto en iOS Safari al enfocar inputs */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="date"],
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea {
+    font-size: 16px !important;
+  }
+
+  /* Header y Navbar Móvil (Diseño en 2 Filas Perfectamente Distribuidas) */
+  .top-navbar {
+    padding: 0.5rem 0.65rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .brand-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 1.1rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .brand-text h1 {
+    font-size: 0.94rem;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .brand-user-operating {
+    font-size: 0.72rem;
+    gap: 0.25rem;
+    margin-top: 1px;
+  }
+
+  .brand-user-operating #brandUserName {
+    max-width: 115px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .brand-user-role-badge {
+    font-size: 0.62rem;
+    padding: 0.08rem 0.35rem;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  /* Acciones de Cabecera Móvil */
+  .navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* Badge de Supabase en móvil: solo el punto luminoso */
+  .sync-badge {
+    padding: 0.25rem 0.35rem;
+  }
+
+  #syncStatusText {
+    display: none;
+  }
+
+  /* Píldora de sesión móvil compacta */
+  .nav-user-session {
+    padding: 0.2rem 0.35rem;
+    gap: 0.25rem;
+  }
+
+  .nav-user-avatar {
+    font-size: 0.95rem;
+  }
+
+  .nav-user-details {
+    display: none;
+  }
+
+  /* Botón alternar Modo Ruta / Administrador */
+  .btn-mode-toggle {
+    padding: 0.22rem 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+  }
+
+  #btnNavLogout,
+  #themeToggleBtn {
+    padding: 0.25rem 0.4rem !important;
+    font-size: 0.825rem !important;
+    min-height: 32px;
+    min-width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Botón nuevo encargo en navbar móvil: icono '+' compacto */
+  .navbar-actions .btn-primary {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    min-height: 32px;
+    border-radius: var(--radius-md);
+  }
+
+  .navbar-actions .btn-primary .nav-btn-text {
+    display: none;
+  }
+
+  /* Omnibox Buscador en Fila 2 completa */
+  .navbar-search {
+    order: 3;
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0.25rem;
+  }
+
+  .search-input-wrapper input {
+    padding: 0.5rem 0.85rem 0.5rem 2.25rem;
+    height: 38px;
+    border-radius: var(--radius-md);
+  }
+
+  .search-icon {
+    left: 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  /* Botón Flotante Móvil (FAB) para Nuevo Encargo */
+  .mobile-fab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    position: fixed;
+    bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    right: 1.25rem;
+    z-index: 80;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 0.7rem 1.15rem;
+    border: none;
+    border-radius: var(--radius-full);
+    box-shadow: 0 10px 25px -4px rgba(79, 70, 229, 0.55), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-fab-btn:active {
+    transform: scale(0.93);
+    box-shadow: 0 4px 12px -2px rgba(79, 70, 229, 0.4);
+  }
+
+  .fab-icon {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  .fab-text {
+    letter-spacing: 0.01em;
+  }
+
+  /* Barra de pestañas deslizable suavemente en móvil */
+  .app-nav {
+    padding: 0.35rem 0.65rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    scrollbar-width: none;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .app-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-tab {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+  }
+
+  /* Área principal de contenido */
+  .main-content {
+    padding: 0.85rem 0.5rem calc(4.75rem + env(safe-area-inset-bottom, 0px)) 0.5rem;
+  }
+
+  .content-card {
+    padding: 0.85rem 0.75rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+  }
+
+  .card-header-flex {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  /* Grilla de Métricas Dashboard en 2 columnas */
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.55rem;
+  }
+
+  .metric-card {
+    padding: 0.75rem 0.65rem;
+    border-radius: var(--radius-md);
+  }
+
+  .metric-label {
+    font-size: 0.65rem;
+    line-height: 1.2;
+  }
+
+  .metric-value {
+    font-size: 1.15rem;
+    margin: 0.3rem 0 0.15rem 0;
+  }
+
+  .metric-hint {
+    display: none;
+  }
+
+  /* Barra de Filtros en Encargos */
+  .filters-bar {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .filters-bar .form-select,
+  .filters-bar .btn {
+    width: 100%;
+  }
+
+  /* Pestañas de grupo de pedidos (Activos / Finalizados / Todos) */
+  .order-group-segmented-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .order-group-tabs-group {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.35rem;
+    width: 100%;
+    scrollbar-width: none;
+  }
+
+  .order-group-tabs-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .order-group-tab {
+    flex-shrink: 0;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+  }
+
+  /* Tarjetas de Encargos en Móvil */
+  .order-item-card {
+    padding: 1rem 0.85rem;
+    gap: 0.75rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .order-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .order-main-info {
+    width: 100%;
+  }
+
+  .order-customer-name {
+    font-size: 1.05rem;
+  }
+
+  .order-meta-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .order-meta-info .meta-pill {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.45rem;
+  }
+
+  /* Métricas financieras del encargo en 3 columnas compactas */
+  .finance-stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.35rem;
+    padding: 0.65rem 0.4rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    text-align: center;
+  }
+
+  .stat-title {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+  }
+
+  .stat-amount {
+    font-size: 0.98rem;
+    margin-top: 0.15rem;
+  }
+
+  /* Grilla de los 4 botones de acción en 2x2 para dedos táctiles */
+  .order-actions-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .quick-order-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .quick-order-actions-grid .btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.55rem 0.25rem;
+    text-align: center;
+    min-height: 42px;
+    border-radius: var(--radius-md);
+  }
+
+  .quick-order-actions-grid .btn:active {
+    transform: scale(0.96);
+  }
+
+  /* Barra de acciones de salida (Imprimir, WhatsApp, Email, Archivar, Eliminar) */
+  .output-actions {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    padding-top: 0.65rem;
+    border-top: 1px dashed var(--border-color);
+  }
+
+  .output-actions .btn-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 1.25rem;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+
+  .output-actions .btn-icon:active {
+    transform: scale(0.92);
+    background: var(--border-color);
+  }
+
+  /* Franja de archivado y eliminación */
+  .admin-archive-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    text-align: center;
+  }
+
+  .admin-strip-text {
+    justify-content: center;
+    font-size: 0.78rem;
+  }
+
+  .admin-archive-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .admin-archive-buttons .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+    font-size: 0.78rem;
+  }
+
+  /* Directorio de Destinos en móvil */
+  #view-destinations .card-header-flex > div:last-child {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #view-destinations #destinationsSearchInput {
+    width: 100% !important;
+  }
+
+  #view-destinations .btn-primary,
+  #view-customers .btn-primary {
+    width: 100%;
+    justify-content: center;
+    min-height: 42px;
+  }
+
+  .destination-row-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.85rem;
+  }
+
+  .destination-row-item > div:last-child {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  /* Configuración y Copias de Seguridad en móvil */
+  #view-settings .btn,
+  #view-settings label.btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 42px;
+    text-align: center;
+  }
+
+  #view-settings .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Modal de Perfil de Cliente en móvil */
+  #customerProfileModal .modal-body > div:first-child > div {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  #customerProfileModal .modal-body > div:first-child > div > div:last-child {
+    text-align: left !important;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  /* Modales en Móvil (Formato Bottom-Sheet Fijo) */
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    max-height: 92vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    width: 100%;
+    margin: 0;
+  }
+
+  .modal-header {
+    padding: 0.85rem 1rem;
+  }
+
+  .modal-title {
+    font-size: 1.05rem;
+  }
+
+  .modal-body {
+    padding: 1rem 0.85rem;
+    gap: 0.85rem;
+  }
+
+  .modal-footer {
+    padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  /* Fila de ítems dinámicos en modal de nuevo encargo */
+  .item-input-row {
+    grid-template-columns: 1fr 1fr auto;
+    gap: 0.4rem;
+    padding: 0.6rem 0.4rem;
+  }
+
+  .item-input-row input:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Script SQL en móvil */
+  #supabaseSqlModal pre {
+    max-height: 45vh;
+    font-size: 0.72rem;
+  }
+
+  /* Toasts en móvil */
+  .toast-container {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    align-items: center;
+  }
+
+  .toast {
+    width: 100%;
+    text-align: center;
+    font-size: 0.825rem;
+  }
+}
+
+/* 3. PANTALLAS EXTRA PEQUEÑAS (<= 400px) */
+@media (max-width: 400px) {
+  .admin-archive-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-text h1 {
+    font-size: 0.88rem;
+  }
+
+  .stat-amount {
+    font-size: 0.92rem;
+  }
+
+  .quick-order-actions-grid .btn {
+    font-size: 0.72rem;
+    padding: 0.45rem 0.15rem;
+  }
 }
 
 

@@ -2,13 +2,13 @@
 <html lang="es" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#4f46e5">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css?v=1.5.9">
+  <link rel="stylesheet" href="index.css?v=1.6.2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
 </head>
 <body>
@@ -96,7 +96,11 @@
         <div class="brand-icon">📦</div>
         <div class="brand-text">
           <h1>Encargos & Apartados</h1>
-          <span class="brand-tag">v1.5.2 Realtime & Offline</span>
+          <div class="brand-user-operating" id="brandUserOperating" title="Usuario activo operando el sistema">
+            <span class="operating-dot"></span>
+            <span id="brandUserName">Usuario</span>
+            <span id="brandUserRoleBadge" class="brand-user-role-badge admin">👑 Admin</span>
+          </div>
         </div>
       </div>
 
@@ -135,8 +139,8 @@
           🌙
         </button>
 
-        <button class="btn btn-primary" onclick="window.app.openNewOrderModal()">
-          <span>➕</span> Nuevo Encargo
+        <button class="btn btn-primary" onclick="window.app.openNewOrderModal()" title="Registrar un nuevo encargo">
+          <span>➕</span> <span class="nav-btn-text">Nuevo Encargo</span>
         </button>
       </div>
     </header>
@@ -933,10 +937,16 @@
     <!-- CONTENEDOR DE ALERTAS TOAST -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- BOTÓN FLOTANTE MÓVIL (FAB) PARA NUEVO ENCARGO -->
+    <button id="mobileFabNewOrder" class="mobile-fab-btn" onclick="window.app.openNewOrderModal()" title="Registrar nuevo encargo" aria-label="Nuevo Encargo">
+      <span class="fab-icon">➕</span>
+      <span class="fab-text">Nuevo Encargo</span>
+    </button>
+
   </div>
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js?v=1.5.9"></script>
+  <script type="module" src="src/app.js?v=1.6.2"></script>
 </body>
 </html>
