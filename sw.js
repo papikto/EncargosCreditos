@@ -3,7 +3,7 @@
  * Manejo de modo Offline, Control de Versiones del App Shell y Actualizaciones Seguras.
  */
 
-const APP_VERSION = 'v1.5.0';
+const APP_VERSION = 'v1.5.6';
 const CACHE_NAME = `encargos-cache-${APP_VERSION}`;
 
 // Assets esenciales para funcionamiento 100% autónomo sin internet
@@ -25,16 +25,14 @@ const STATIC_ASSETS = [
   './src/services/auth.service.js'
 ];
 
-// 1. INSTALACIÓN: Precaché de todos los recursos del App Shell
+// 1. INSTALACIÓN: Precaché de todos los recursos del App Shell y activación inmediata
 self.addEventListener('install', (event) => {
   console.log(`[SW] Instalando Service Worker versión: ${APP_VERSION}`);
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Pre-cacheando assets estáticos esenciales...');
       return cache.addAll(STATIC_ASSETS);
-    }).then(() => {
-      // No forzamos skipWaiting de inmediato para permitir que el frontend
-      // informe al usuario si hay una actualización pendiente
     })
   );
 });

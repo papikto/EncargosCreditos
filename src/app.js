@@ -227,6 +227,13 @@ class App {
   // Enrutador de Vistas
   // ==========================================
   switchView(viewName) {
+    if (viewName === 'finalized') {
+      this.currentOrderGroup = 'finalizados';
+      viewName = 'orders';
+    } else if (viewName === 'orders') {
+      this.currentOrderGroup = 'activos';
+    }
+
     // Guardián de seguridad según rol:
     if (viewName === 'settings' && !authService.isAdmin()) {
       this.showToast('Acceso restringido: Configuración reservada para Administradores.', 'warning');
@@ -240,9 +247,15 @@ class App {
 
     this.currentView = viewName;
 
-    // Actualizar tabs activas
+    // Actualizar tabs activas en navbar
     document.querySelectorAll('.nav-tab').forEach(tab => {
-      tab.classList.toggle('active', tab.dataset.view === viewName);
+      if (tab.dataset.view === 'orders') {
+        tab.classList.toggle('active', this.currentView === 'orders' && this.currentOrderGroup !== 'finalizados');
+      } else if (tab.dataset.view === 'finalized') {
+        tab.classList.toggle('active', this.currentView === 'orders' && this.currentOrderGroup === 'finalizados');
+      } else {
+        tab.classList.toggle('active', tab.dataset.view === this.currentView);
+      }
     });
 
     // Actualizar secciones de vista
@@ -271,6 +284,26 @@ class App {
     if (destBadge) {
       destBadge.textContent = `${dests.length}`;
     }
+
+    // Actualizar contadores de navegación y pestañas segmentadas
+    const orders = await orderService.getAllOrders();
+    const activeCount = orders.filter(o => o.estado !== 'cancelado' && !o.archivado && (!o.entregado || o.saldoPendiente > 0)).length;
+    const finCount = orders.filter(o => o.estado !== 'cancelado' && (o.archivado || (o.entregado && o.saldoPendiente === 0))).length;
+
+    const navActiveBadge = document.getElementById('ordersActiveCountBadge');
+    if (navActiveBadge) navActiveBadge.textContent = `${activeCount}`;
+
+    const navFinBadge = document.getElementById('ordersFinalizedNavBadge');
+    if (navFinBadge) navFinBadge.textContent = `${finCount}`;
+
+    const badgeActive = document.getElementById('badgeActiveOrdersCount');
+    if (badgeActive) badgeActive.textContent = `${activeCount}`;
+
+    const badgeFinalized = document.getElementById('badgeFinalizedOrdersCount');
+    if (badgeFinalized) badgeFinalized.textContent = `${finCount}`;
+
+    const badgeAll = document.getElementById('badgeAllOrdersCount');
+    if (badgeAll) badgeAll.textContent = `${orders.length}`;
   }
 
   // ==========================================
@@ -363,36 +396,166 @@ class App {
   // ==========================================
   // VISTA 3: ENCARGOS & APARTADOS (Listado Completo)
   // ==========================================
+  // VISTA 3: ENCARGOS & APARTADOS (Listado Completo)
+  // ==========================================
   async renderOrders() {
+    if (!authService.isAdmin()) {
+      this.currentOrderGroup = 'activos';
+    } else {
+      this.currentOrderGroup = this.currentOrderGroup || 'activos';
+    }
     const orders = await orderService.getAllOrders();
     const cityFilter = document.getElementById('orderCityFilter')?.value || 'all';
     const statusFilter = document.getElementById('orderStatusFilter')?.value || 'all';
 
+    // Un pedido permanece activo en pantalla hasta que el Administrador lo archive en historial
+    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !o.archivado);
+    const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && o.archivado);
+
+    // Actualizar contadores
+    const badgeActive = document.getElementById('badgeActiveOrdersCount');
+    if (badgeActive) badgeActive.textContent = `${activeOrders.length}`;
+    const badgeFinalized = document.getElementById('badgeFinalizedOrdersCount');
+    if (badgeFinalized) badgeFinalized.textContent = `${finalizedOrders.length}`;
+    const badgeAll = document.getElementById('badgeAllOrdersCount');
+    if (badgeAll) badgeAll.textContent = `${orders.length}`;
+    const navActiveBadge = document.getElementById('ordersActiveCountBadge');
+    if (navActiveBadge) navActiveBadge.textContent = `${activeOrders.length}`;
+    const navFinBadge = document.getElementById('ordersFinalizedNavBadge');
+    if (navFinBadge) navFinBadge.textContent = `${finalizedOrders.length}`;
+
+    // Actualizar botones de segmento
+    document.getElementById('tabGroupActive')?.classList.toggle('active', this.currentOrderGroup === 'activos');
+    document.getElementById('tabGroupFinalized')?.classList.toggle('active', this.currentOrderGroup === 'finalizados');
+    document.getElementById('tabGroupAll')?.classList.toggle('active', this.currentOrderGroup === 'todos');
+
+    // Actualizar navbar
+    document.getElementById('navTabOrders')?.classList.toggle('active', this.currentView === 'orders' && this.currentOrderGroup !== 'finalizados');
+    document.getElementById('navTabFinalized')?.classList.toggle('active', this.currentView === 'orders' && this.currentOrderGroup === 'finalizados');
+
+    // Textos de estado
+    const titleEl = document.getElementById('ordersViewMainTitle');
+    const descEl = document.getElementById('orderGroupDescription');
+    if (this.currentOrderGroup === 'activos') {
+      if (titleEl) titleEl.innerHTML = `📦 Encargos Activos`;
+      if (descEl) descEl.innerHTML = `Mostrando <strong>${activeOrders.length} pedido(s) activo(s)</strong> (en tránsito o con saldo)`;
+    } else if (this.currentOrderGroup === 'finalizados') {
+      if (titleEl) titleEl.innerHTML = `🏁 Pedidos Finalizados / Entregados`;
+      if (descEl) descEl.innerHTML = `Mostrando <strong>${finalizedOrders.length} pedido(s) finalizado(s)</strong> en historial`;
+    } else {
+      if (titleEl) titleEl.innerHTML = `📋 Todos los Encargos`;
+      if (descEl) descEl.innerHTML = `Mostrando <strong>${orders.length} pedido(s)</strong> en total`;
+    }
+
+    // Filtrar por grupo (Activos, Finalizados, Todos)
     let filtered = orders;
+    if (this.currentOrderGroup === 'activos') {
+      filtered = activeOrders;
+    } else if (this.currentOrderGroup === 'finalizados') {
+      filtered = finalizedOrders;
+    }
+
+    // Poblar opciones del filtro de estado según el grupo
+    this.populateStatusFilter(this.currentOrderGroup, statusFilter);
+
+    // Filtrar por estado específico de forma inteligente
+    const currentStatusVal = document.getElementById('orderStatusFilter')?.value || 'all';
+    if (currentStatusVal !== 'all') {
+      if (currentStatusVal === 'por_adquirir') filtered = filtered.filter(o => !o.adquirido && !o.entregado);
+      else if (currentStatusVal === 'adquirido') filtered = filtered.filter(o => o.adquirido && !o.entregado);
+      else if (currentStatusVal === 'entregado') filtered = filtered.filter(o => o.entregado);
+      else if (currentStatusVal === 'entregado_con_deuda') filtered = filtered.filter(o => o.entregado && o.saldoPendiente > 0);
+      else if (currentStatusVal === 'cancelado_total') filtered = filtered.filter(o => o.saldoPendiente === 0);
+      else if (currentStatusVal === 'pendiente_anticipo') filtered = filtered.filter(o => o.totalAbonado === 0);
+      else filtered = filtered.filter(o => o.estado === currentStatusVal);
+    }
+
+    // Poblar selector de ciudades
+    this.populateCityFilter(orders);
+
+    // Filtrar por ciudad
     if (cityFilter !== 'all') {
       filtered = filtered.filter(o => o.lugarDestino?.ciudad === cityFilter);
     }
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(o => o.estado === statusFilter);
-    }
-
-    // Llenar selector de ciudades con las ciudades existentes
-    this.populateCityFilter(orders);
 
     const container = document.getElementById('ordersListContainer');
     if (!container) return;
 
     if (filtered.length === 0) {
+      let emptyIcon = '📦';
+      let emptyTitle = 'No hay pedidos activos actualmente';
+      let emptySubtitle = 'Todos los encargos han sido entregados o puedes registrar uno nuevo con el botón superior.';
+
+      if (this.currentOrderGroup === 'finalizados') {
+        emptyIcon = '🏁';
+        emptyTitle = 'No hay pedidos finalizados / entregados aún';
+        emptySubtitle = 'Cuando liquides y entregues un pedido activo, presiona "Archivar Encargo" para guardarlo en esta sección.';
+      } else if (this.currentOrderGroup === 'todos' || currentStatusVal !== 'all' || cityFilter !== 'all') {
+        emptyIcon = '🔍';
+        emptyTitle = 'No hay pedidos con los filtros seleccionados';
+        emptySubtitle = 'Intenta seleccionando otra ciudad o cambiando el filtro de estado.';
+      }
+
       container.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
-          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📦</div>
-          <p style="font-size: 1.1rem; font-weight: 600;">No hay pedidos con los filtros seleccionados</p>
+        <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted); grid-column: 1 / -1;">
+          <div style="font-size: 2.8rem; margin-bottom: 0.5rem;">${emptyIcon}</div>
+          <p style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">${emptyTitle}</p>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 480px; margin: 0 auto;">${emptySubtitle}</p>
         </div>
       `;
       return;
     }
 
     container.innerHTML = filtered.map(order => this.buildOrderCardHtml(order)).join('');
+  }
+
+  setOrderGroupFilter(group) {
+    if (!authService.isAdmin() && group !== 'activos') {
+      this.currentOrderGroup = 'activos';
+      return;
+    }
+    this.currentOrderGroup = group;
+    const statusSelect = document.getElementById('orderStatusFilter');
+    if (statusSelect) statusSelect.value = 'all';
+    this.renderOrders();
+  }
+
+  populateStatusFilter(group, selectedVal = 'all') {
+    const select = document.getElementById('orderStatusFilter');
+    if (!select) return;
+
+    let options = '';
+    if (group === 'activos') {
+      options = `
+        <option value="all">Todos los estados activos</option>
+        <option value="por_adquirir">⏳ Por Comprar / Adquirir</option>
+        <option value="adquirido">🛍️ Productos Adquiridos (Por Entregar)</option>
+        <option value="cancelado_total">🟢 Totalmente Cancelados (Por Entregar)</option>
+        <option value="entregado_con_deuda">📦 Entregados con Saldo Pendiente</option>
+        <option value="pendiente_anticipo">🟡 Falta Anticipo</option>
+      `;
+    } else if (group === 'finalizados') {
+      options = `
+        <option value="all">Todos los finalizados y entregados</option>
+        <option value="entregado">📦 Entregados</option>
+      `;
+    } else {
+      options = `
+        <option value="all">Todos los pedidos</option>
+        <option value="por_adquirir">⏳ Por Adquirir</option>
+        <option value="adquirido">🛍️ Productos Adquiridos</option>
+        <option value="entregado">📦 Productos Entregados</option>
+        <option value="cancelado_total">🟢 Totalmente Cancelados</option>
+        <option value="pendiente_anticipo">🟡 Falta Anticipo</option>
+      `;
+    }
+
+    select.innerHTML = options;
+    if (Array.from(select.options).some(o => o.value === selectedVal)) {
+      select.value = selectedVal;
+    } else {
+      select.value = 'all';
+    }
   }
 
   populateCityFilter(orders) {
@@ -414,24 +577,53 @@ class App {
 
   // ==========================================
   // CONSTRUCTOR DE TARJETA DE ENCARGO / APARTADO
-  // (Con botones de Abono, Liquidación Total en 1 clic, WhatsApp, Ticket y Email)
+  // (Con los 4 botones clave: Agregar Abono, Cancelación Total, Productos Adquiridos, Producto Entregado)
   // ==========================================
   buildOrderCardHtml(order) {
     const currency = this.appConfig?.empresa?.moneda || '$';
+    const isAdmin = authService.isAdmin();
+    const defaultPrefix = this.appConfig?.empresa?.prefijoPais || '+58';
+    const cleanPhone = order.clienteTelefono ? notificationService.cleanPhoneNumber(order.clienteTelefono, defaultPrefix) : '';
+    const waUrl = cleanPhone 
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(notificationService.buildWhatsAppMessage(order, this.appConfig))}`
+      : '#';
 
-    // Generar estado amigable
-    let statusBadgeClass = 'active';
-    let statusLabel = 'Apartado / En curso';
+    // Estados independientes: Financiero y Logístico
+    const isPaid = order.saldoPendiente === 0;
+    const isAcquired = Boolean(order.adquirido);
+    const isDelivered = Boolean(order.entregado);
+    const isArchived = Boolean(order.archivado);
 
-    if (order.estado === 'pendiente_anticipo') {
-      statusBadgeClass = 'pending';
-      statusLabel = '🟡 Falta Anticipo';
-    } else if (order.saldoPendiente === 0) {
-      statusBadgeClass = 'paid';
-      statusLabel = '🟢 Liquidado al 100%';
-    } else if (order.estado === 'entregado') {
-      statusBadgeClass = 'delivered';
-      statusLabel = 'Entregado';
+    // 1. Marca Financiera
+    let financialBadgeHtml = '';
+    if (isPaid) {
+      financialBadgeHtml = `<span class="status-badge paid">🟢 Cancelado 100%</span>`;
+    } else if (order.totalAbonado > 0) {
+      financialBadgeHtml = `<span class="status-badge active">🔵 En Abonos (${order.porcentajePagado}%)</span>`;
+    } else {
+      financialBadgeHtml = `<span class="status-badge pending">🟡 Falta Anticipo</span>`;
+    }
+
+    // 2. Marca de Adquisición
+    let acquiredBadgeHtml = '';
+    if (isAcquired) {
+      acquiredBadgeHtml = `<span class="status-badge acquired">🛍️ Adquirido</span>`;
+    } else {
+      acquiredBadgeHtml = `<span class="status-badge por-comprar">⏳ Por Adquirir</span>`;
+    }
+
+    // 3. Marca de Entrega Física
+    let deliveryBadgeHtml = '';
+    if (isDelivered) {
+      deliveryBadgeHtml = `<span class="status-badge delivered">📦 Entregado</span>`;
+    } else {
+      deliveryBadgeHtml = `<span class="status-badge por-entregar">🚚 Por Entregar</span>`;
+    }
+
+    // 4. Marca de Archivado en Historial (si aplica)
+    let archivedBadgeHtml = '';
+    if (isArchived) {
+      archivedBadgeHtml = `<span class="status-badge finalized">📁 Archivado</span>`;
     }
 
     // Lista de productos compacta
@@ -442,10 +634,8 @@ class App {
       </div>
     `).join('');
 
-    const isLiquidated = order.saldoPendiente === 0;
-
     return `
-      <div class="order-item-card" data-order-id="${order.id}">
+      <div class="order-item-card ${isArchived ? 'order-card-archived' : ''}" data-order-id="${order.id}">
         <!-- Header de la tarjeta -->
         <div class="order-card-header">
           <div class="order-main-info">
@@ -458,12 +648,19 @@ class App {
               <a href="${orderService.getMapsRouteUrl(order.lugarDestino)}" target="_blank" rel="noopener noreferrer" class="meta-pill meta-pill-clickable" title="Clic para abrir ubicación o ruta en Google Maps">
                 📍 ${order.lugarDestino?.ciudad || 'Sin destino'}${order.lugarDestino?.puntoEntrega ? ` (${order.lugarDestino.puntoEntrega})` : ''} <span style="font-size: 0.75rem;">↗</span>
               </a>
-              ${order.fechaEntregaEstimada ? `<span class="meta-pill">📅 Entrega: ${order.fechaEntregaEstimada}</span>` : ''}
-              ${order.clienteTelefono ? `<span class="meta-pill">📞 ${order.clienteTelefono}</span>` : ''}
+              ${order.fechaEntregaEstimada ? `<span class="meta-pill">📅 Fecha estimada: ${order.fechaEntregaEstimada}</span>` : ''}
+              ${order.clienteTelefono ? `
+                <a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="meta-pill meta-pill-clickable meta-pill-whatsapp" title="Clic para enviar mensaje por WhatsApp a ${order.clienteNombre} (${order.clienteTelefono})">
+                  💬 ${order.clienteTelefono} <span style="font-size: 0.75rem;">↗</span>
+                </a>
+              ` : ''}
             </div>
           </div>
-          <div>
-            <span class="status-badge ${statusBadgeClass}">${statusLabel}</span>
+          <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+            ${financialBadgeHtml}
+            ${acquiredBadgeHtml}
+            ${deliveryBadgeHtml}
+            ${archivedBadgeHtml}
           </div>
         </div>
 
@@ -491,15 +688,15 @@ class App {
             </div>
             <div class="finance-stat-item">
               <span class="stat-title">SALDO RESTANTE</span>
-              <span class="stat-amount ${isLiquidated ? 'paid' : 'debt'}">
-                ${isLiquidated ? 'PAGADO COMPLETO' : `${currency} ${order.saldoPendiente.toFixed(2)}`}
+              <span class="stat-amount ${isPaid ? 'paid' : 'debt'}">
+                ${isPaid ? 'PAGADO COMPLETO' : `${currency} ${order.saldoPendiente.toFixed(2)}`}
               </span>
             </div>
           </div>
 
           <!-- Barra de Progreso de pago del Apartado -->
           <div class="progress-bar-container">
-            <div class="progress-bar-fill ${isLiquidated ? 'complete' : ''}" style="width: ${order.porcentajePagado}%;"></div>
+            <div class="progress-bar-fill ${isPaid ? 'complete' : ''}" style="width: ${order.porcentajePagado}%;"></div>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
             <span>Anticipo requerido: ${currency} ${order.montoAnticipoCalculado.toFixed(2)} (${order.anticipoExigidoValor}%)</span>
@@ -507,23 +704,47 @@ class App {
           </div>
         </div>
 
-        <!-- Barra de Acciones Rápidas -->
+        <!-- Barra de Acciones: Los 4 botones requeridos + Comprobantes -->
         <div class="order-actions-toolbar">
-          <div class="quick-financial-actions">
-            ${!isLiquidated ? `
-              <button class="btn btn-success" onclick="window.app.openAddPaymentModal('${order.id}')" title="Agregar abono / cuota de apartado">
+          <div class="quick-order-actions-grid">
+            <!-- 1. Botón: Agregar Abono -->
+            ${order.saldoPendiente > 0 ? `
+              <button class="btn btn-success" onclick="window.app.openAddPaymentModal('${order.id}')" title="Registrar un abono / cuota de dinero">
                 ➕ Agregar Abono
               </button>
+            ` : `
+              <button class="btn btn-disabled" disabled title="Este pedido ya no tiene saldo pendiente">
+                ➕ Agregar Abono
+              </button>
+            `}
+
+            <!-- 2. Botón: Cancelación Total -->
+            ${order.saldoPendiente > 0 ? `
               <button class="btn btn-warning" onclick="window.app.quickFullSettlement('${order.id}')" title="Liquidar el 100% restante en 1 clic">
                 ⚡ Cancelación Total
               </button>
             ` : `
-              <span style="font-size: 0.85rem; font-weight: 700; color: var(--color-success); display: flex; align-items: center; gap: 4px;">
+              <button class="btn btn-paid-disabled" disabled title="Pedido totalmente cancelado">
                 ✅ Totalmente Cancelado
-              </span>
+              </button>
             `}
+
+            <!-- 3. Botón: Productos Adquiridos -->
+            <button class="btn ${isAcquired ? 'btn-acquired-active' : 'btn-acquired'}" 
+                    onclick="window.app.toggleOrderAcquired('${order.id}')" 
+                    title="${isAcquired ? 'Productos ya adquiridos. Clic para cambiar.' : 'Marcar que compraste o conseguiste estos productos'}">
+              ${isAcquired ? '✅ Productos Adquiridos' : '🛍️ Productos Adquiridos'}
+            </button>
+
+            <!-- 4. Botón: Producto Entregado -->
+            <button class="btn ${isDelivered ? 'btn-delivered-active' : 'btn-delivered'}" 
+                    onclick="window.app.toggleOrderDelivered('${order.id}')" 
+                    title="${isDelivered ? 'Producto entregado al cliente. Clic para desmarcar.' : 'Marcar que el cliente ya recibió el producto físicamente'}">
+              ${isDelivered ? '✅ Producto Entregado' : '📦 Producto Entregado'}
+            </button>
           </div>
 
+          <!-- Comprobantes y Acciones de Salida -->
           <div class="output-actions">
             <button class="btn btn-secondary btn-icon" title="Imprimir Ticket Térmico" onclick="window.app.printTicket('${order.id}')">
               🖨️
@@ -534,8 +755,47 @@ class App {
             <button class="btn btn-secondary btn-icon" title="Enviar por Email" onclick="window.app.sendEmail('${order.id}')">
               ✉️
             </button>
+            ${isAdmin && isDelivered && isPaid && !isArchived ? `
+              <button class="btn btn-secondary btn-icon" title="Archivar pedido en Historial Finalizados (Admin)" onclick="window.app.archiveFinalizedOrder('${order.id}')" style="font-size: 0.85rem;">
+                📁
+              </button>
+            ` : ''}
+            ${isAdmin ? `
+              <button class="btn btn-secondary btn-icon btn-danger-icon" title="Eliminar definitivamente de la base de datos (Admin)" onclick="window.app.confirmDeleteOrder('${order.id}')" style="font-size: 0.85rem;">
+                🗑️
+              </button>
+            ` : ''}
           </div>
         </div>
+
+        <!-- Franja de Archivado Exclusiva para Administrador (Cuando está 100% pagado y entregado, pero no archivado aún) -->
+        ${isAdmin && isDelivered && isPaid && !isArchived ? `
+          <div class="admin-archive-strip">
+            <span class="admin-strip-text">👑 Pedido completado (Cancelado 100% y Entregado)</span>
+            <button class="btn btn-archive" onclick="window.app.archiveFinalizedOrder('${order.id}')" title="Archivar pedido para moverlo al historial de finalizados">
+              📁 Archivar Encargo
+            </button>
+          </div>
+        ` : ''}
+
+        <!-- Acciones en Pedido Archivado (Exclusivo Administrador: Restaurar o Eliminar Totalmente) -->
+        ${isArchived ? `
+          <div class="archived-card-actions">
+            <span style="font-size: 0.825rem; font-weight: 600; color: var(--text-secondary);">
+              📁 Encargo en Historial de Finalizados
+            </span>
+            ${isAdmin ? `
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.75rem;" onclick="window.app.unarchiveOrder('${order.id}')" title="Restaurar este pedido a la pantalla de pedidos activos">
+                  ↩️ Restaurar a Activos
+                </button>
+                <button class="btn btn-danger" style="font-size: 0.8rem; padding: 0.4rem 0.75rem;" onclick="window.app.confirmDeleteOrder('${order.id}')" title="Eliminar permanentemente de la base de datos para limpiar espacio">
+                  🗑️ Eliminar Totalmente
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
       </div>
     `;
   }
@@ -566,7 +826,11 @@ class App {
           <div>
             <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">👤 ${c.nombre}</h3>
             <div class="order-meta-info">
-              ${c.telefono ? `<span class="meta-pill">📞 ${c.telefono}</span>` : ''}
+              ${c.telefono ? `
+                <a href="https://wa.me/${notificationService.cleanPhoneNumber(c.telefono, this.appConfig?.empresa?.prefijoPais || '+58')}" target="_blank" rel="noopener noreferrer" class="meta-pill meta-pill-clickable meta-pill-whatsapp" onclick="event.stopPropagation();" title="Clic para enviar WhatsApp a ${c.nombre} (${c.telefono})">
+                  💬 ${c.telefono} <span style="font-size: 0.75rem;">↗</span>
+                </a>
+              ` : ''}
               ${c.ciudadDefault ? `<span class="meta-pill">📍 ${c.ciudadDefault}</span>` : ''}
               ${c.email ? `<span class="meta-pill">✉️ ${c.email}</span>` : ''}
             </div>
@@ -919,6 +1183,10 @@ class App {
     const tabCustomers = document.getElementById('navTabCustomers');
     const tabSettings = document.getElementById('navTabSettings');
 
+    // Segmentos de la vista de pedidos
+    const tabGroupFinalized = document.getElementById('tabGroupFinalized');
+    const tabGroupAll = document.getElementById('tabGroupAll');
+
     if (isAdmin) {
       // 👑 ADMINISTRADOR: Acceso total a todas las interfaces
       if (tabDashboard) tabDashboard.style.display = 'flex';
@@ -927,12 +1195,19 @@ class App {
       if (tabDestinations) tabDestinations.style.display = 'flex';
       if (tabCustomers) tabCustomers.style.display = 'flex';
       if (tabSettings) tabSettings.style.display = 'flex';
+      if (tabGroupFinalized) tabGroupFinalized.style.display = 'inline-flex';
+      if (tabGroupAll) tabGroupAll.style.display = 'inline-flex';
     } else {
-      // 🚚 DESPACHADOR: Solo le atañe el modo despachador
+      // 🚚 DESPACHADOR: Solo le atañe el modo despachador y pedidos activos
       // Ocultar configuración, panel de finanzas y CRM de clientes
       if (tabDashboard) tabDashboard.style.display = 'none';
       if (tabCustomers) tabCustomers.style.display = 'none';
       if (tabSettings) tabSettings.style.display = 'none';
+
+      // Despachador opera exclusivamente en encargos activos (ocultar historial y archivo)
+      if (tabGroupFinalized) tabGroupFinalized.style.display = 'none';
+      if (tabGroupAll) tabGroupAll.style.display = 'none';
+      this.currentOrderGroup = 'activos';
 
       // Mantener operativas las vistas de logística:
       if (tabOrders) tabOrders.style.display = 'flex';
@@ -943,11 +1218,11 @@ class App {
     const brandTag = document.querySelector('.brand-tag');
     if (brandTag && current) {
       if (authService.isSimulatedDispatcher()) {
-        brandTag.textContent = `v1.4.0 (Modo Ruta / Despacho)`;
+        brandTag.textContent = `v1.5.6 (Modo Ruta / Despacho)`;
       } else if (isAdmin) {
-        brandTag.textContent = `v1.4.0 (Administrador)`;
+        brandTag.textContent = `v1.5.6 (Administrador)`;
       } else {
-        brandTag.textContent = `v1.4.0 (Despachador)`;
+        brandTag.textContent = `v1.5.6 (Despachador)`;
       }
     }
   }
@@ -1343,6 +1618,184 @@ class App {
     }
   }
 
+  // Finalizar encargo y archivarlo como entregado (Exclusivo Administrador)
+  async finalizeOrder(orderId) {
+    if (!authService.isAdmin()) {
+      alert('Acceso denegado: La función de finalizar y archivar pedidos es exclusiva para Administradores.');
+      return;
+    }
+    const order = await orderService.getOrderById(orderId);
+    if (!order) return;
+
+    if (order.saldoPendiente > 0) {
+      const currency = this.appConfig?.empresa?.moneda || '$';
+      const confirmDebt = confirm(
+        `⚠️ ATENCIÓN: El encargo ${order.id} aún tiene un saldo pendiente de ${currency} ${order.saldoPendiente.toFixed(2)}.\n\n` +
+        `¿Deseas marcarlo como ENTREGADO y archivarlo en Pedidos Finalizados?`
+      );
+      if (!confirmDebt) return;
+    } else {
+      const confirmFin = confirm(
+        `¿Deseas marcar el encargo ${order.id} (${order.clienteNombre}) como ENTREGADO y FINALIZADO?\n\n` +
+        `Se archivará en la sección de Pedidos Finalizados y se removerá de la lista de activos en pantalla.`
+      );
+      if (!confirmFin) return;
+    }
+
+    try {
+      await orderService.finalizeOrder(orderId);
+      this.showToast(`¡Encargo ${order.id} finalizado y archivado con éxito!`);
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al finalizar el encargo: ' + err.message);
+    }
+  }
+
+  // Alternar estado de productos adquiridos / comprados
+  async toggleOrderAcquired(orderId) {
+    try {
+      const updated = await orderService.toggleOrderAcquired(orderId);
+      if (updated.adquirido) {
+        this.showToast(`🛍️ ¡Productos de ${orderId} marcados como ADQUIRIDOS!`, 'success');
+      } else {
+        this.showToast(`Encargo ${orderId} marcado como pendiente de adquisición`, 'info');
+      }
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al actualizar adquisición: ' + err.message);
+    }
+  }
+
+  // Alternar estado de producto entregado al cliente
+  async toggleOrderDelivered(orderId) {
+    const order = await orderService.getOrderById(orderId);
+    if (!order) return;
+
+    const willBeDelivered = !order.entregado;
+    if (willBeDelivered && order.saldoPendiente > 0) {
+      const currency = this.appConfig?.empresa?.moneda || '$';
+      const confirmDebt = confirm(
+        `⚠️ ATENCIÓN: El encargo ${order.id} tiene un saldo pendiente de ${currency} ${order.saldoPendiente.toFixed(2)}.\n\n` +
+        `¿Confirmas la entrega física del producto al cliente manteniendo el saldo deudor pendiente por cobrar?`
+      );
+      if (!confirmDebt) return;
+    }
+
+    try {
+      const updated = await orderService.toggleOrderDelivered(orderId);
+      if (updated.entregado) {
+        this.showToast(`📦 ¡Encargo ${orderId} marcado como ENTREGADO!`, 'success');
+      } else {
+        this.showToast(`Encargo ${orderId} marcado como pendiente de entrega`, 'info');
+      }
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al actualizar entrega: ' + err.message);
+    }
+  }
+
+  // Archivar encargo finalizado en historial (Exclusivo Administrador)
+  async archiveFinalizedOrder(orderId) {
+    if (!authService.isAdmin()) {
+      alert('Acceso denegado: La función de archivar pedidos es exclusiva para Administradores.');
+      return;
+    }
+    const order = await orderService.getOrderById(orderId);
+    if (!order) return;
+
+    const confirmArchive = confirm(
+      `¿Deseas archivar el encargo ${order.id} (${order.clienteNombre}) en el historial de Pedidos Finalizados?\n\n` +
+      `Se guardará en el historial y quedarán en pantalla únicamente los pedidos activos.`
+    );
+    if (!confirmArchive) return;
+
+    try {
+      await orderService.archiveFinalizedOrder(orderId);
+      this.showToast(`📁 Encargo ${orderId} archivado en historial.`);
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al archivar encargo: ' + err.message);
+    }
+  }
+
+  // Desarchivar / Restaurar encargo a pedidos activos (Exclusivo Administrador)
+  async unarchiveOrder(orderId) {
+    if (!authService.isAdmin()) {
+      alert('Acceso denegado: La función de restaurar pedidos archivados es exclusiva para Administradores.');
+      return;
+    }
+    const order = await orderService.getOrderById(orderId);
+    if (!order) return;
+
+    const confirmRestore = confirm(
+      `¿Deseas desarchivar el encargo ${order.id} (${order.clienteNombre}) y regresarlo a la pantalla de Encargos Activos?`
+    );
+    if (!confirmRestore) return;
+
+    try {
+      await orderService.unarchiveOrder(orderId);
+      this.showToast(`↩️ Encargo ${orderId} restaurado a pedidos activos.`);
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al restaurar encargo: ' + err.message);
+    }
+  }
+
+  // Eliminar encargo definitivamente de la base de datos (Exclusivo Administrador para limpiar base de datos)
+  async confirmDeleteOrder(orderId) {
+    if (!authService.isAdmin()) {
+      alert('Acceso denegado: La eliminación definitiva de la base de datos es exclusiva para Administradores.');
+      return;
+    }
+    const order = await orderService.getOrderById(orderId);
+    if (!order) return;
+
+    const confirmDel = confirm(
+      `⚠️ ELIMINAR TOTALMENTE DE LA BASE DE DATOS:\n\n` +
+      `¿Estás seguro de que deseas eliminar permanentemente el encargo ${order.id} de "${order.clienteNombre}"?\n\n` +
+      `Esta acción limpiará definitivamente este registro de la base de datos y no se puede deshacer.`
+    );
+    if (!confirmDel) return;
+
+    try {
+      await orderService.deleteOrder(orderId);
+      this.showToast(`🗑️ Encargo ${orderId} eliminado definitivamente de la base de datos.`);
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al eliminar encargo: ' + err.message);
+    }
+  }
+
+  // Reabrir encargo finalizado para regresarlo a pedidos activos (Exclusivo Administrador)
+  async reopenOrder(orderId) {
+    if (!authService.isAdmin()) {
+      alert('Acceso denegado: Esta función es exclusiva para Administradores.');
+      return;
+    }
+    const order = await orderService.getOrderById(orderId);
+    if (!order) return;
+
+    const confirmReopen = confirm(
+      `¿Deseas reabrir el encargo ${order.id} (${order.clienteNombre}) para regresarlo a la pantalla de Pedidos Activos?`
+    );
+    if (!confirmReopen) return;
+
+    try {
+      await orderService.reopenOrder(orderId);
+      this.showToast(`Encargo ${order.id} reabierto a pedidos activos.`);
+      this.refreshCurrentView();
+      this.updateGlobalBadgeMetrics();
+    } catch (err) {
+      alert('Error al reabrir el encargo: ' + err.message);
+    }
+  }
+
   // ==========================================
   // COMPROBANTES: TICKET, WHATSAPP, EMAIL
   // ==========================================
@@ -1376,7 +1829,15 @@ class App {
     const currency = this.appConfig?.empresa?.moneda || '$';
 
     document.getElementById('profCustomerName').textContent = profile.nombre;
-    document.getElementById('profCustomerPhone').textContent = profile.telefono || 'Sin teléfono';
+    const phoneEl = document.getElementById('profCustomerPhone');
+    if (phoneEl) {
+      if (profile.telefono) {
+        const cleanPhone = notificationService.cleanPhoneNumber(profile.telefono, this.appConfig?.empresa?.prefijoPais || '+58');
+        phoneEl.innerHTML = `<a href="https://wa.me/${cleanPhone}" target="_blank" rel="noopener noreferrer" style="color: #16a34a; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Abrir chat de WhatsApp">💬 ${profile.telefono} <span style="font-size: 0.75rem;">↗</span></a>`;
+      } else {
+        phoneEl.textContent = 'Sin teléfono';
+      }
+    }
     document.getElementById('profCustomerEmail').textContent = profile.email || 'Sin email';
     document.getElementById('profCustomerCity').textContent = profile.ciudadDefault || 'No especificada';
     document.getElementById('profCustomerAddress').textContent = profile.direccionDefault || 'No especificada';
@@ -1503,9 +1964,9 @@ class App {
 
   async submitNewOrder() {
     const customerSelect = document.getElementById('newOrderCustomerSelect');
-    const customerId = customerSelect.value;
+    const clienteId = customerSelect.value;
 
-    if (!customerId) {
+    if (!clienteId) {
       alert('Por favor selecciona o crea un cliente para este encargo.');
       return;
     }

@@ -467,6 +467,75 @@ body {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
+/* Barra de Pestañas Segmentadas (Activos vs Finalizados vs Todos) */
+.order-group-segmented-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.4rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.order-group-tabs-group {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.order-group-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.825rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.order-group-tab:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .order-group-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.order-group-tab.active {
+  background: var(--bg-secondary);
+  color: var(--brand-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.order-pill-badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-full);
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.order-pill-badge.finalized {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+}
+
+.order-pill-badge.all {
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary);
+}
+
 /* Tarjetas de Encargos / Apartados (Resultados de Búsqueda y Lista) */
 .orders-list-grid {
   display: flex;
@@ -541,6 +610,41 @@ body {
   background: var(--bg-tertiary);
   padding: 0.2rem 0.6rem;
   border-radius: var(--radius-full);
+  border: 1px solid transparent;
+}
+
+.meta-pill-clickable {
+  text-decoration: none;
+  color: var(--text-secondary);
+  transition: var(--transition-fast);
+  cursor: pointer;
+}
+
+.meta-pill-clickable:hover {
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--brand-primary);
+  border-color: rgba(79, 70, 229, 0.25);
+  transform: translateY(-1px);
+}
+
+.meta-pill-whatsapp {
+  text-decoration: none;
+  color: var(--text-secondary);
+  transition: var(--transition-fast);
+  cursor: pointer;
+}
+
+.meta-pill-whatsapp:hover {
+  background: rgba(37, 211, 102, 0.15) !important;
+  color: #16a34a !important;
+  border-color: rgba(37, 211, 102, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .meta-pill-whatsapp:hover {
+  background: rgba(37, 211, 102, 0.2) !important;
+  color: #4ade80 !important;
+  border-color: rgba(74, 222, 128, 0.4) !important;
 }
 
 /* Badges de Estado */
@@ -575,9 +679,33 @@ body {
 }
 
 .status-badge.delivered {
-  background: var(--bg-tertiary);
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="dark"] .status-badge.delivered {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.status-badge.por-entregar {
+  background: rgba(148, 163, 184, 0.12);
   color: var(--text-secondary);
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.status-badge.acquired {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.status-badge.por-comprar {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 /* Desglose de Productos en la Tarjeta */
@@ -680,6 +808,76 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
+/* Grilla de los 4 botones principales requeridos */
+.quick-order-actions-grid {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.btn-acquired {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.btn-acquired:hover {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
+  border-color: #0284c7;
+}
+
+.btn-acquired-active {
+  background: rgba(14, 165, 233, 0.16);
+  color: #0369a1;
+  border: 1px solid rgba(14, 165, 233, 0.45);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.btn-delivered {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.btn-delivered:hover {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border-color: #059669;
+}
+
+.btn-delivered-active {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.btn-paid-disabled {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+  cursor: default;
+}
+
+.btn-disabled {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
 .quick-financial-actions {
   display: flex;
   align-items: center;
@@ -691,6 +889,107 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+/* Botón y franja de archivado (Exclusivo Administrador) */
+.admin-archive-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px dashed rgba(79, 70, 229, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.85rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+[data-theme="dark"] .admin-archive-strip {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.admin-strip-text {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: var(--brand-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-archive {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: #ffffff;
+  font-size: 0.825rem;
+  font-weight: 700;
+  padding: 0.45rem 0.95rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
+  transition: var(--transition-fast);
+}
+
+.btn-archive:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.35);
+}
+
+/* Acciones en tarjeta archivada */
+.archived-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.85rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-danger:hover {
+  background: var(--color-danger);
+  color: #ffffff;
+  border-color: var(--color-danger);
+}
+
+.btn-danger-icon:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+}
+
+.status-badge.finalized {
+  background: rgba(100, 116, 139, 0.15);
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+[data-theme="dark"] .status-badge.finalized {
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.order-card-archived {
+  opacity: 0.92;
+  border-style: dashed;
 }
 
 /* Modales */

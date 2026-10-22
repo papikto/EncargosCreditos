@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css">
+  <link rel="stylesheet" href="index.css?v=1.5.6">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
 </head>
 <body>
@@ -96,7 +96,7 @@
         <div class="brand-icon">📦</div>
         <div class="brand-text">
           <h1>Encargos & Apartados</h1>
-          <span class="brand-tag">v1.5.0 Realtime & Offline</span>
+          <span class="brand-tag">v1.5.2 Realtime & Offline</span>
         </div>
       </div>
 
@@ -163,7 +163,12 @@
         <span id="searchCountBadge" class="tab-badge">0</span>
       </div>
       <div class="nav-tab" id="navTabOrders" data-view="orders">
-        <span>📦</span> Todos los Encargos
+        <span>📦</span> Encargos Activos
+        <span id="ordersActiveCountBadge" class="tab-badge">0</span>
+      </div>
+      <div class="nav-tab" id="navTabFinalized" data-view="finalized">
+        <span>🏁</span> Pedidos Finalizados
+        <span id="ordersFinalizedNavBadge" class="tab-badge">0</span>
       </div>
       <div class="nav-tab" id="navTabDestinations" data-view="destinations">
         <span>📍</span> Destinos & Rutas
@@ -247,7 +252,12 @@
       <section id="view-orders" class="view-section">
         <div class="content-card">
           <div class="card-header-flex">
-            <h2 class="card-title">📦 Todos los Encargos y Apartados</h2>
+            <div>
+              <h2 class="card-title" id="ordersViewMainTitle">📦 Encargos & Apartados</h2>
+              <p style="font-size: 0.825rem; color: var(--text-secondary); margin-top: 3px;" id="orderGroupSubtitle">
+                Control de pedidos activos, pagos por apartado y entregas
+              </p>
+            </div>
             <div class="filters-bar">
               <select id="orderCityFilter" class="form-select">
                 <option value="all">Todas las ciudades</option>
@@ -260,6 +270,24 @@
                 <option value="entregado">Entregado</option>
               </select>
               <button class="btn btn-primary" onclick="window.app.openNewOrderModal()">➕ Nuevo Encargo</button>
+            </div>
+          </div>
+
+          <!-- Selector Segmentado: Activos vs Finalizados vs Todos -->
+          <div class="order-group-segmented-bar">
+            <div class="order-group-tabs-group">
+              <button type="button" class="order-group-tab active" id="tabGroupActive" onclick="window.app.setOrderGroupFilter('activos')">
+                <span>⚡</span> Encargos Activos <span id="badgeActiveOrdersCount" class="order-pill-badge">0</span>
+              </button>
+              <button type="button" class="order-group-tab" id="tabGroupFinalized" onclick="window.app.setOrderGroupFilter('finalizados')">
+                <span>🏁</span> Finalizados / Entregados <span id="badgeFinalizedOrdersCount" class="order-pill-badge finalized">0</span>
+              </button>
+              <button type="button" class="order-group-tab" id="tabGroupAll" onclick="window.app.setOrderGroupFilter('todos')">
+                <span>📋</span> Todos los Pedidos <span id="badgeAllOrdersCount" class="order-pill-badge all">0</span>
+              </button>
+            </div>
+            <div id="orderGroupDescription" style="font-size: 0.8rem; color: var(--text-secondary);">
+              Mostrando solo pedidos en curso y por entregar
             </div>
           </div>
 
@@ -909,6 +937,6 @@
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js"></script>
+  <script type="module" src="src/app.js?v=1.5.6"></script>
 </body>
 </html>

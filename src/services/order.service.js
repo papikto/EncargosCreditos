@@ -16,7 +16,12 @@ class OrderService {
   // Obtener todos los pedidos
   async getAllOrders() {
     const orders = await storageService.getAll('orders');
-    return orders.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
+    return orders.map(o => ({
+      ...o,
+      adquirido: Boolean(o.adquirido),
+      entregado: Boolean(o.entregado || o.estado === 'entregado'),
+      archivado: Boolean(o.archivado)
+    })).sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
   }
 
   // Obtener un pedido por ID
@@ -115,6 +120,11 @@ class OrderService {
       saldoPendiente,
       porcentajePagado,
       estado,
+      adquirido: Boolean(orderData.adquirido),
+      fechaAdquisicion: orderData.fechaAdquisicion || null,
+      entregado: Boolean(orderData.entregado || orderData.estado === 'entregado'),
+      fechaEntregaReal: orderData.fechaEntregaReal || null,
+      archivado: Boolean(orderData.archivado),
       notasInternas: orderData.notasInternas ? orderData.notasInternas.trim() : '',
       updatedAt: now
     };
@@ -197,6 +207,111 @@ class OrderService {
     return order;
   }
 
+  // Alternar estado de productos adquiridos / comprados
+  async toggleOrderAcquired(orderId) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Pedido no encontrado');
+    const now = new Date().toISOString();
+    order.adquirido = !order.adquirido;
+    order.fechaAdquisicion = order.adquirido ? now : null;
+    order.updatedAt = now;
+    await storageService.put('orders', order);
+    supabaseService.pushRecord('orders', order).catch(() => {});
+    return order;
+  }
+
+  // Alternar estado de producto entregado al cliente
+  async toggleOrderDelivered(orderId) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Pedido no encontrado');
+    const now = new Date().toISOString();
+    order.entregado = !order.entregado;
+    order.fechaEntregaReal = order.entregado ? now : null;
+    
+    // Si se entrega, se asegura que los productos fueron adquiridos
+    if (order.entregado) {
+      order.adquirido = true;
+      if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
+      order.estado = 'entregado';
+    } else {
+      if (order.saldoPendiente === 0 && order.costoTotal > 0) {
+        order.estado = 'liquidado_total';
+      } else if (order.totalAbonado >= order.montoAnticipoCalculado && order.totalAbonado > 0) {
+        order.estado = 'anticipo_pagado';
+      } else {
+        order.estado = 'pendiente_anticipo';
+      }
+    }
+    
+    order.updatedAt = now;
+    await storageService.put('orders', order);
+    supabaseService.pushRecord('orders', order).catch(() => {});
+    return order;
+  }
+
+  // Finalizar encargo y marcar como entregado / archivado
+  async finalizeOrder(orderId, fechaEntrega = null) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Pedido no encontrado');
+    const now = new Date().toISOString();
+    order.entregado = true;
+    order.adquirido = true;
+    order.fechaEntregaReal = fechaEntrega || now;
+    if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
+    order.estado = 'entregado';
+    order.archivado = true;
+    order.updatedAt = now;
+    await storageService.put('orders', order);
+    supabaseService.pushRecord('orders', order).catch(() => {});
+    return order;
+  }
+
+  // Archivar encargo finalizado en historial
+  async archiveFinalizedOrder(orderId) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Pedido no encontrado');
+    const now = new Date().toISOString();
+    order.archivado = true;
+    order.fechaArchivado = now;
+    order.updatedAt = now;
+    await storageService.put('orders', order);
+    supabaseService.pushRecord('orders', order).catch(() => {});
+    return order;
+  }
+
+  // Desarchivar encargo y restaurarlo en activos (Solo Administrador)
+  async unarchiveOrder(orderId) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Pedido no encontrado');
+    const now = new Date().toISOString();
+    order.archivado = false;
+    order.updatedAt = now;
+    await storageService.put('orders', order);
+    supabaseService.pushRecord('orders', order).catch(() => {});
+    return order;
+  }
+
+  // Reabrir encargo finalizado para regresarlo a pedidos activos
+  async reopenOrder(orderId) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Pedido no encontrado');
+    const now = new Date().toISOString();
+    order.entregado = false;
+    order.archivado = false;
+    delete order.fechaEntregaReal;
+    if (order.saldoPendiente === 0 && order.costoTotal > 0) {
+      order.estado = 'liquidado_total';
+    } else if (order.totalAbonado >= order.montoAnticipoCalculado && order.totalAbonado > 0) {
+      order.estado = 'anticipo_pagado';
+    } else {
+      order.estado = 'pendiente_anticipo';
+    }
+    order.updatedAt = now;
+    await storageService.put('orders', order);
+    supabaseService.pushRecord('orders', order).catch(() => {});
+    return order;
+  }
+
   // Eliminar un encargo
   async deleteOrder(orderId) {
     supabaseService.pushDelete('orders', orderId).catch(() => {});
@@ -232,29 +347,34 @@ class OrderService {
   // Estadísticas para el Dashboard
   async getDashboardMetrics() {
     const orders = await this.getAllOrders();
-    const activeOrders = orders.filter(o => o.estado !== 'cancelado');
+    // Un pedido permanece activo en pantalla hasta que el Administrador lo archive en historial
+    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !o.archivado);
+    const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && o.archivado);
 
     let totalPorCobrar = 0;       // Saldo deudor global acumulado
     let totalRecaudado = 0;        // Total recaudado en abonos y anticipos
-    let totalFacturado = 0;        // Valor total de todos los pedidos activos
+    let totalFacturado = 0;        // Valor total de todos los pedidos no cancelados
     let pendientesAnticipoCount = 0;
     let apartadosEnAbonosCount = 0;
     let liquidadosCount = 0;
-    let entregadosCount = 0;
+    let entregadosCount = orders.filter(o => o.entregado).length;
+    let adquiridosCount = orders.filter(o => o.adquirido).length;
 
     const destinosMap = {};
 
-    activeOrders.forEach(o => {
-      totalPorCobrar += (o.saldoPendiente || 0);
+    // Métricas globales financieras
+    orders.filter(o => o.estado !== 'cancelado').forEach(o => {
       totalRecaudado += (o.totalAbonado || 0);
       totalFacturado += (o.costoTotal || 0);
+      totalPorCobrar += (o.saldoPendiente || 0);
 
-      if (o.estado === 'pendiente_anticipo') pendientesAnticipoCount++;
-      else if (o.saldoPendiente > 0) apartadosEnAbonosCount++;
-      else if (o.estado === 'liquidado_total') liquidadosCount++;
-      else if (o.estado === 'entregado') entregadosCount++;
+      if (o.saldoPendiente === 0 && o.costoTotal > 0) liquidadosCount++;
+      else if (o.totalAbonado > 0) apartadosEnAbonosCount++;
+      else pendientesAnticipoCount++;
+    });
 
-      // Agrupación por ciudad
+    // Agrupación por ciudad solo de envíos activos pendientes de entrega
+    activeOrders.filter(o => !o.entregado).forEach(o => {
       const ciudad = (o.lugarDestino && o.lugarDestino.ciudad) ? o.lugarDestino.ciudad : 'Sin destino';
       if (!destinosMap[ciudad]) {
         destinosMap[ciudad] = { ciudad, cantidad: 0, saldoPendiente: 0, totalAbonado: 0 };
@@ -269,6 +389,9 @@ class OrderService {
       totalRecaudado: Math.round(totalRecaudado * 100) / 100,
       totalFacturado: Math.round(totalFacturado * 100) / 100,
       totalPedidos: activeOrders.length,
+      finalizadosCount: finalizedOrders.length,
+      adquiridosCount,
+      entregadosCount,
       pendientesAnticipoCount,
       apartadosEnAbonosCount,
       liquidadosCount,
