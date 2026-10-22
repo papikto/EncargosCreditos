@@ -99,7 +99,7 @@ class OrderService {
 
     // Determinar estado financiero/logístico
     let estado = orderData.estado || 'pendiente_anticipo';
-    if (saldoPendiente === 0 && costoTotal > 0) {
+    if (saldoPendiente < 0.01 && costoTotal > 0) {
       if (estado !== 'entregado' && estado !== 'cancelado') {
         estado = 'liquidado_total';
       }
@@ -180,7 +180,7 @@ class OrderService {
     order.porcentajePagado = order.costoTotal > 0 ? Math.min(100, Math.round((order.totalAbonado / order.costoTotal) * 100)) : 100;
 
     // Actualizar estado si se liquidó
-    if (order.saldoPendiente === 0) {
+    if (order.saldoPendiente < 0.01) {
       if (order.estado !== 'entregado') {
         order.estado = 'liquidado_total';
       }
@@ -242,7 +242,7 @@ class OrderService {
       order.fechaEntregaReal = null;
       order.archivado = false;
       delete order.fechaArchivado;
-      if (order.saldoPendiente === 0 && order.costoTotal > 0) {
+      if (order.saldoPendiente < 0.01 && order.costoTotal > 0) {
         order.estado = 'liquidado_total';
       } else if (order.totalAbonado >= order.montoAnticipoCalculado && order.totalAbonado > 0) {
         order.estado = 'anticipo_pagado';
@@ -279,7 +279,7 @@ class OrderService {
       if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
       order.estado = 'entregado';
     } else {
-      if (order.saldoPendiente === 0 && order.costoTotal > 0) {
+      if (order.saldoPendiente < 0.01 && order.costoTotal > 0) {
         order.estado = 'liquidado_total';
       } else if (order.totalAbonado >= order.montoAnticipoCalculado && order.totalAbonado > 0) {
         order.estado = 'anticipo_pagado';
@@ -319,12 +319,15 @@ class OrderService {
     const now = new Date().toISOString();
     order.archivado = true;
     order.fechaArchivado = now;
-    // Si se archiva, asegurar que esté marcado como adquirido y entregado
-    order.adquirido = true;
-    if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
-    order.entregado = true;
-    if (!order.fechaEntregaReal) order.fechaEntregaReal = now;
-    order.estado = 'entregado';
+    // Solo forzar adquirido/entregado si ya estaba marcado como entregado,
+    // o si se está archivando un pedido completamente finalizado.
+    // No se sobreescribe el estado de entrega si el pedido aún no fue entregado.
+    if (order.entregado) {
+      order.adquirido = true;
+      if (!order.fechaAdquisicion) order.fechaAdquisicion = now;
+      if (!order.fechaEntregaReal) order.fechaEntregaReal = now;
+      order.estado = 'entregado';
+    }
     order.updatedAt = now;
     await storageService.put('orders', order);
     supabaseService.pushRecord('orders', order).catch(() => {});
@@ -351,7 +354,7 @@ class OrderService {
     order.entregado = false;
     order.archivado = false;
     delete order.fechaEntregaReal;
-    if (order.saldoPendiente === 0 && order.costoTotal > 0) {
+    if (order.saldoPendiente < 0.01 && order.costoTotal > 0) {
       order.estado = 'liquidado_total';
     } else if (order.totalAbonado >= order.montoAnticipoCalculado && order.totalAbonado > 0) {
       order.estado = 'anticipo_pagado';
@@ -465,7 +468,7 @@ class OrderService {
   isOrderFinalized(order) {
     if (!order) return false;
     if (order.archivado) return true;
-    const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
+    const isPaid = (order.saldoPendiente < 0.01 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
     const isDelivered = Boolean(order.entregado);
     const isAcquired = Boolean(order.adquirido);
     return isPaid && isAcquired && isDelivered;
@@ -496,9 +499,9 @@ class OrderService {
       totalFacturado += (o.costoTotal || 0);
       totalPorCobrar += (o.saldoPendiente || 0);
 
-      if (o.saldoPendiente === 0 && o.costoTotal > 0) liquidadosCount++;
+      if (o.saldoPendiente < 0.01 && o.costoTotal > 0) liquidadosCount++;
       else if (o.totalAbonado > 0) apartadosEnAbonosCount++;
-      else pendientesAnticipoCount++;
+      else if (o.costoTotal > 0) pendientesAnticipoCount++; // Solo cuenta encargos con precio definido
     });
 
     // Agrupación por ciudad solo de envíos activos pendientes de entrega
