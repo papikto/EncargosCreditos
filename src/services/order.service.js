@@ -26,7 +26,14 @@ class OrderService {
 
   // Obtener un pedido por ID
   async getOrderById(orderId) {
-    return storageService.getById('orders', orderId);
+    const order = await storageService.getById('orders', orderId);
+    if (!order) return null;
+    return {
+      ...order,
+      adquirido: Boolean(order.adquirido),
+      entregado: Boolean(order.entregado || order.estado === 'entregado'),
+      archivado: Boolean(order.archivado)
+    };
   }
 
   // Crear o actualizar un encargo / apartado
@@ -344,12 +351,22 @@ class OrderService {
     });
   }
 
+  // Determina si un pedido está finalizado (cumple las 3 condiciones: cancelado 100%, productos adquiridos y producto entregado, o está archivado)
+  isOrderFinalized(order) {
+    if (!order) return false;
+    if (order.archivado) return true;
+    const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
+    const isAcquired = Boolean(order.adquirido);
+    const isDelivered = Boolean(order.entregado || order.estado === 'entregado');
+    return isPaid && isAcquired && isDelivered;
+  }
+
   // Estadísticas para el Dashboard
   async getDashboardMetrics() {
     const orders = await this.getAllOrders();
-    // Un pedido permanece activo en pantalla hasta que el Administrador lo archive en historial
-    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !o.archivado);
-    const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && o.archivado);
+    // Un pedido va a finalizados si cumple las 3 condiciones o está archivado
+    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o));
+    const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && this.isOrderFinalized(o));
 
     let totalPorCobrar = 0;       // Saldo deudor global acumulado
     let totalRecaudado = 0;        // Total recaudado en abonos y anticipos

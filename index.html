@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css?v=1.5.6">
+  <link rel="stylesheet" href="index.css?v=1.5.9">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
 </head>
 <body>
@@ -123,7 +123,7 @@
             <span id="navUserName" class="nav-user-name">Usuario</span>
             <span id="navUserRoleTag" class="nav-user-role">Cargo</span>
           </div>
-          <button type="button" id="btnToggleDispatcherMode" class="btn btn-secondary" style="display: none; padding: 0.25rem 0.55rem; font-size: 0.75rem;" title="Alternar temporalmente a modo ruta/despachador" onclick="window.app.handleToggleDispatcherMode()">
+          <button type="button" id="btnToggleDispatcherMode" class="btn-mode-toggle btn-mode-dispatcher" style="display: none;" title="Alternar entre Modo Administrador y Modo Ruta">
             🚚 Modo Ruta
           </button>
           <button type="button" id="btnNavLogout" class="btn btn-secondary btn-icon" style="padding: 0.3rem 0.55rem; font-size: 0.85rem;" title="Cerrar Sesión" onclick="window.app.handleNavLogout()">
@@ -937,6 +937,6 @@
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js?v=1.5.6"></script>
+  <script type="module" src="src/app.js?v=1.5.9"></script>
 </body>
 </html>

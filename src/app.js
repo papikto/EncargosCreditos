@@ -272,6 +272,26 @@ class App {
     if (viewName === 'settings') this.renderSettings();
   }
 
+  // Refresca la vista que esté activa actualmente en pantalla
+  refreshCurrentView() {
+    if (this.currentView === 'dashboard') this.renderDashboard();
+    else if (this.currentView === 'search') this.renderSearchOrders();
+    else if (this.currentView === 'orders') this.renderOrders();
+    else if (this.currentView === 'destinations') this.renderDestinations();
+    else if (this.currentView === 'customers') this.renderCustomers();
+    else if (this.currentView === 'settings') this.renderSettings();
+  }
+
+  // Determina si un pedido está finalizado (cumple las 3 condiciones: cancelado 100%, productos adquiridos y producto entregado, o está archivado)
+  isOrderFinalized(order) {
+    if (!order) return false;
+    if (order.archivado) return true;
+    const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
+    const isAcquired = Boolean(order.adquirido);
+    const isDelivered = Boolean(order.entregado || order.estado === 'entregado');
+    return isPaid && isAcquired && isDelivered;
+  }
+
   async updateGlobalBadgeMetrics() {
     const metrics = await orderService.getDashboardMetrics();
     const currency = this.appConfig?.empresa?.moneda || '$';
@@ -287,8 +307,8 @@ class App {
 
     // Actualizar contadores de navegación y pestañas segmentadas
     const orders = await orderService.getAllOrders();
-    const activeCount = orders.filter(o => o.estado !== 'cancelado' && !o.archivado && (!o.entregado || o.saldoPendiente > 0)).length;
-    const finCount = orders.filter(o => o.estado !== 'cancelado' && (o.archivado || (o.entregado && o.saldoPendiente === 0))).length;
+    const activeCount = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o)).length;
+    const finCount = orders.filter(o => o.estado !== 'cancelado' && this.isOrderFinalized(o)).length;
 
     const navActiveBadge = document.getElementById('ordersActiveCountBadge');
     if (navActiveBadge) navActiveBadge.textContent = `${activeCount}`;
@@ -351,15 +371,15 @@ class App {
       }
     }
 
-    // Renderizar encargos más recientes
+    // Renderizar encargos más recientes (Solo pedidos activos, excluyendo finalizados)
     const orders = await orderService.getAllOrders();
     const recentOrdersContainer = document.getElementById('dashRecentOrdersList');
     if (recentOrdersContainer) {
-      const top5 = orders.slice(0, 5);
-      if (top5.length === 0) {
-        recentOrdersContainer.innerHTML = `<p class="text-muted" style="padding: 1rem; text-align: center;">No hay encargos aún.</p>`;
+      const activeRecent = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o)).slice(0, 5);
+      if (activeRecent.length === 0) {
+        recentOrdersContainer.innerHTML = `<p class="text-muted" style="padding: 1rem; text-align: center;">No hay encargos activos recientes.</p>`;
       } else {
-        recentOrdersContainer.innerHTML = top5.map(o => this.buildOrderCardHtml(o)).join('');
+        recentOrdersContainer.innerHTML = activeRecent.map(o => this.buildOrderCardHtml(o)).join('');
       }
     }
   }
@@ -408,9 +428,9 @@ class App {
     const cityFilter = document.getElementById('orderCityFilter')?.value || 'all';
     const statusFilter = document.getElementById('orderStatusFilter')?.value || 'all';
 
-    // Un pedido permanece activo en pantalla hasta que el Administrador lo archive en historial
-    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !o.archivado);
-    const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && o.archivado);
+    // Un pedido va a finalizados si cumple las 3 condiciones (100% pagado, adquirido y entregado) o está archivado
+    const activeOrders = orders.filter(o => o.estado !== 'cancelado' && !this.isOrderFinalized(o));
+    const finalizedOrders = orders.filter(o => o.estado !== 'cancelado' && this.isOrderFinalized(o));
 
     // Actualizar contadores
     const badgeActive = document.getElementById('badgeActiveOrdersCount');
@@ -435,15 +455,19 @@ class App {
 
     // Textos de estado
     const titleEl = document.getElementById('ordersViewMainTitle');
+    const subtitleEl = document.getElementById('orderGroupSubtitle');
     const descEl = document.getElementById('orderGroupDescription');
     if (this.currentOrderGroup === 'activos') {
       if (titleEl) titleEl.innerHTML = `📦 Encargos Activos`;
+      if (subtitleEl) subtitleEl.textContent = 'Control de pedidos en tránsito, compras y pagos por apartado';
       if (descEl) descEl.innerHTML = `Mostrando <strong>${activeOrders.length} pedido(s) activo(s)</strong> (en tránsito o con saldo)`;
     } else if (this.currentOrderGroup === 'finalizados') {
       if (titleEl) titleEl.innerHTML = `🏁 Pedidos Finalizados / Entregados`;
+      if (subtitleEl) subtitleEl.textContent = 'Historial de encargos completados, entregados y archivados';
       if (descEl) descEl.innerHTML = `Mostrando <strong>${finalizedOrders.length} pedido(s) finalizado(s)</strong> en historial`;
     } else {
       if (titleEl) titleEl.innerHTML = `📋 Todos los Encargos`;
+      if (subtitleEl) subtitleEl.textContent = 'Listado global de todos los encargos activos y archivados';
       if (descEl) descEl.innerHTML = `Mostrando <strong>${orders.length} pedido(s)</strong> en total`;
     }
 
@@ -589,10 +613,11 @@ class App {
       : '#';
 
     // Estados independientes: Financiero y Logístico
-    const isPaid = order.saldoPendiente === 0;
+    const isPaid = (order.saldoPendiente === 0 || (order.costoTotal > 0 && order.totalAbonado >= order.costoTotal));
     const isAcquired = Boolean(order.adquirido);
-    const isDelivered = Boolean(order.entregado);
+    const isDelivered = Boolean(order.entregado || order.estado === 'entregado');
     const isArchived = Boolean(order.archivado);
+    const isFinalized = (isPaid && isAcquired && isDelivered) || isArchived;
 
     // 1. Marca Financiera
     let financialBadgeHtml = '';
@@ -768,32 +793,26 @@ class App {
           </div>
         </div>
 
-        <!-- Franja de Archivado Exclusiva para Administrador (Cuando está 100% pagado y entregado, pero no archivado aún) -->
-        ${isAdmin && isDelivered && isPaid && !isArchived ? `
+        <!-- Franja Exclusiva para Administrador en Pedidos Finalizados / Archivados -->
+        ${isAdmin && isFinalized ? `
           <div class="admin-archive-strip">
-            <span class="admin-strip-text">👑 Pedido completado (Cancelado 100% y Entregado)</span>
-            <button class="btn btn-archive" onclick="window.app.archiveFinalizedOrder('${order.id}')" title="Archivar pedido para moverlo al historial de finalizados">
-              📁 Archivar Encargo
-            </button>
-          </div>
-        ` : ''}
-
-        <!-- Acciones en Pedido Archivado (Exclusivo Administrador: Restaurar o Eliminar Totalmente) -->
-        ${isArchived ? `
-          <div class="archived-card-actions">
-            <span style="font-size: 0.825rem; font-weight: 600; color: var(--text-secondary);">
-              📁 Encargo en Historial de Finalizados
+            <span class="admin-strip-text">
+              🏁 ${isArchived ? '📁 Encargo Archivado en Historial' : '👑 Pedido Finalizado (Pagado 100%, Adquirido y Entregado)'}
             </span>
-            ${isAdmin ? `
-              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.75rem;" onclick="window.app.unarchiveOrder('${order.id}')" title="Restaurar este pedido a la pantalla de pedidos activos">
+            <div class="admin-archive-buttons" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              ${!isArchived ? `
+                <button class="btn btn-archive" onclick="window.app.archiveFinalizedOrder('${order.id}')" title="Archivar pedido con sello de historial">
+                  📁 Archivar Encargo
+                </button>
+              ` : `
+                <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.75rem;" onclick="window.app.unarchiveOrder('${order.id}')" title="Restaurar este pedido a la pantalla de pedidos activos">
                   ↩️ Restaurar a Activos
                 </button>
-                <button class="btn btn-danger" style="font-size: 0.8rem; padding: 0.4rem 0.75rem;" onclick="window.app.confirmDeleteOrder('${order.id}')" title="Eliminar permanentemente de la base de datos para limpiar espacio">
-                  🗑️ Eliminar Totalmente
-                </button>
-              </div>
-            ` : ''}
+              `}
+              <button class="btn btn-danger" style="font-size: 0.825rem; padding: 0.45rem 0.85rem;" onclick="window.app.confirmDeleteOrder('${order.id}')" title="Eliminar definitivamente este encargo de la base de datos">
+                🗑️ Eliminar Totalmente
+              </button>
+            </div>
           </div>
         ` : ''}
       </div>
@@ -1132,14 +1151,15 @@ class App {
       return;
     }
 
-    if (sessionContainer) sessionContainer.style.display = 'inline-flex';
-    if (avatarEl) avatarEl.textContent = user.avatar || (user.rol === 'admin' ? '👑' : '🚚');
+    const isSimulated = authService.isSimulatedDispatcher();
+
+    if (avatarEl) avatarEl.textContent = isSimulated ? '🚚' : (user.avatar || (user.rol === 'admin' ? '👑' : '🚚'));
     if (nameEl) nameEl.textContent = user.nombre;
 
     if (roleEl) {
-      if (authService.isSimulatedDispatcher()) {
-        roleEl.textContent = '👑 Modo Ruta Activo';
-        roleEl.style.color = 'var(--brand-primary)';
+      if (isSimulated) {
+        roleEl.textContent = 'En Modo Ruta (Despacho)';
+        roleEl.style.color = '#38bdf8';
       } else {
         roleEl.textContent = user.cargoTitulo || (user.rol === 'admin' ? 'Administrador General' : 'Despachador');
         roleEl.style.color = '';
@@ -1150,14 +1170,14 @@ class App {
       // Solo el Administrador puede alternar modo ruta / despachador
       if (user.rol === 'admin') {
         toggleBtn.style.display = 'inline-flex';
-        if (authService.isSimulatedDispatcher()) {
-          toggleBtn.innerHTML = '👑 Volver a Admin';
-          toggleBtn.className = 'btn btn-primary';
-          toggleBtn.title = 'Regresar al modo Administrador con acceso total';
+        if (isSimulated) {
+          toggleBtn.innerHTML = '👑 Modo Administrador';
+          toggleBtn.className = 'btn-mode-toggle btn-mode-admin';
+          toggleBtn.title = 'Actualmente en Modo Ruta. Haz clic para volver al Modo Administrador con acceso total';
         } else {
           toggleBtn.innerHTML = '🚚 Modo Ruta';
-          toggleBtn.className = 'btn btn-secondary';
-          toggleBtn.title = 'Alternar temporalmente a modo despachador para operar entregas';
+          toggleBtn.className = 'btn-mode-toggle btn-mode-dispatcher';
+          toggleBtn.title = 'Actualmente en Modo Administrador. Haz clic para cambiar a Modo Ruta (Vista de Despachador)';
         }
       } else {
         // Al despachador real le queda totalmente oculto
@@ -1218,11 +1238,11 @@ class App {
     const brandTag = document.querySelector('.brand-tag');
     if (brandTag && current) {
       if (authService.isSimulatedDispatcher()) {
-        brandTag.textContent = `v1.5.6 (Modo Ruta / Despacho)`;
+        brandTag.textContent = `v1.5.9 (Modo Ruta / Despacho)`;
       } else if (isAdmin) {
-        brandTag.textContent = `v1.5.6 (Administrador)`;
+        brandTag.textContent = `v1.5.9 (Administrador)`;
       } else {
-        brandTag.textContent = `v1.5.6 (Despachador)`;
+        brandTag.textContent = `v1.5.9 (Despachador)`;
       }
     }
   }
@@ -1716,8 +1736,9 @@ class App {
       await orderService.archiveFinalizedOrder(orderId);
       this.showToast(`📁 Encargo ${orderId} archivado en historial.`);
       this.refreshCurrentView();
-      this.updateGlobalBadgeMetrics();
+      await this.updateGlobalBadgeMetrics();
     } catch (err) {
+      console.error('Error al archivar encargo:', err);
       alert('Error al archivar encargo: ' + err.message);
     }
   }
@@ -1732,16 +1753,18 @@ class App {
     if (!order) return;
 
     const confirmRestore = confirm(
-      `¿Deseas desarchivar el encargo ${order.id} (${order.clienteNombre}) y regresarlo a la pantalla de Encargos Activos?`
+      `¿Deseas restaurar el encargo ${order.id} (${order.clienteNombre}) y regresarlo a la pantalla de Encargos Activos?\n\n` +
+      `Se desarchivará y se marcará como pendiente de entrega para continuar en seguimiento activo.`
     );
     if (!confirmRestore) return;
 
     try {
-      await orderService.unarchiveOrder(orderId);
+      await orderService.reopenOrder(orderId);
       this.showToast(`↩️ Encargo ${orderId} restaurado a pedidos activos.`);
       this.refreshCurrentView();
-      this.updateGlobalBadgeMetrics();
+      await this.updateGlobalBadgeMetrics();
     } catch (err) {
+      console.error('Error al restaurar encargo:', err);
       alert('Error al restaurar encargo: ' + err.message);
     }
   }
@@ -1766,8 +1789,9 @@ class App {
       await orderService.deleteOrder(orderId);
       this.showToast(`🗑️ Encargo ${orderId} eliminado definitivamente de la base de datos.`);
       this.refreshCurrentView();
-      this.updateGlobalBadgeMetrics();
+      await this.updateGlobalBadgeMetrics();
     } catch (err) {
+      console.error('Error al eliminar encargo:', err);
       alert('Error al eliminar encargo: ' + err.message);
     }
   }

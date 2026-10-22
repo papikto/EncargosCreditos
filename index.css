@@ -976,6 +976,56 @@ body {
   border-color: var(--color-danger) !important;
 }
 
+/* Botón de alternar Modo Administrador / Modo Ruta */
+.btn-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-mode-toggle.btn-mode-dispatcher {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+[data-theme="dark"] .btn-mode-toggle.btn-mode-dispatcher {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.btn-mode-toggle.btn-mode-dispatcher:hover {
+  background: rgba(59, 130, 246, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-mode-toggle.btn-mode-admin {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.3) 100%);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .btn-mode-toggle.btn-mode-admin {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.22) 0%, rgba(202, 138, 4, 0.32) 100%);
+  color: #facc15;
+  border-color: rgba(234, 179, 8, 0.6);
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.25);
+}
+
+.btn-mode-toggle.btn-mode-admin:hover {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(202, 138, 4, 0.45) 100%);
+  border-color: #facc15;
+  transform: translateY(-1px);
+}
+
 .status-badge.finalized {
   background: rgba(100, 116, 139, 0.15);
   color: #475569;
