@@ -3,7 +3,7 @@
  * Manejo de modo Offline, Control de Versiones del App Shell y Actualizaciones Seguras.
  */
 
-const APP_VERSION = 'v1.6.2';
+const APP_VERSION = 'v1.6.5';
 const CACHE_NAME = `encargos-cache-${APP_VERSION}`;
 
 // Assets esenciales para funcionamiento 100% autónomo sin internet
@@ -56,7 +56,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. FETCH: Estrategia Stale-While-Revalidate con Fallback Offline Robusto
+// 3. FETCH: Estrategia Network-First para HTML/JS/CSS y Fallback Offline Robusto
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
@@ -71,9 +71,41 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Para navegación (documentos HTML), usar Network-First para reflejar actualizaciones inmediatamente
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match('./index.html') || caches.match('./'))
+    );
+    return;
+  }
+
+  // Para scripts y estilos locales, usar Network-First cuando hay conexión para evitar desfase de versiones
+  if (request.destination === 'script' || request.destination === 'style' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Para el resto de recursos (imágenes, fuentes, etc.): Stale-While-Revalidate
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      // Si está en caché, lo servimos de inmediato y en segundo plano intentamos actualizarlo
       const fetchPromise = fetch(request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
@@ -84,12 +116,7 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          // Sin conexión: si no hay caché, retornar fallback navegable si es documento HTML
-          if (request.mode === 'navigate') {
-            return caches.match('./index.html') || caches.match('./');
-          }
-        });
+        .catch(() => {});
 
       return cachedResponse || fetchPromise;
     })

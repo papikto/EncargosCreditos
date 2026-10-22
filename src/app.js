@@ -1114,16 +1114,25 @@ class App {
   checkAuthenticationState() {
     const isAuth = authService.isAuthenticated();
     const loginOverlay = document.getElementById('appLoginOverlay');
-    const initBox = document.getElementById('initialSupabaseSetupBox');
     const isSupabaseConfigured = !!(this.appConfig?.cloud?.supabaseUrl && this.appConfig?.cloud?.supabaseAnonKey);
+    const tabsNav = document.getElementById('loginTabsNav');
+    const unlockWrapper = document.getElementById('loginAdminUnlockWrapper');
 
     if (!isAuth) {
       if (loginOverlay) {
         loginOverlay.style.display = 'flex';
       }
-      // Si la base no tiene Supabase configurado en este dispositivo, sugerir el formulario inicial
-      if (!isSupabaseConfigured && initBox) {
-        initBox.style.display = 'block';
+      // Si la aplicación se abre en blanco por primera vez sin Supabase configurado, activar Supabase directamente
+      if (!isSupabaseConfigured) {
+        if (tabsNav) tabsNav.style.display = 'flex';
+        if (unlockWrapper) unlockWrapper.style.display = 'none';
+        this.switchLoginMode('supabase', false);
+      } else {
+        // Si ya está configurado (ej. teléfono de un despachador): mostrar solo el formulario limpio de login
+        if (tabsNav) tabsNav.style.display = 'none';
+        if (unlockWrapper) unlockWrapper.style.display = 'block';
+        this.clearSupabaseLoginInputs();
+        this.switchLoginMode('login');
       }
       this.updateNavSessionUI();
       return false;
@@ -1347,6 +1356,191 @@ class App {
       this.switchView('dashboard');
     }
     this.updateGlobalBadgeMetrics();
+  }
+
+  clearSupabaseLoginInputs() {
+    const urlInput = document.getElementById('initSupabaseUrl');
+    const keyInput = document.getElementById('initSupabaseKey');
+    if (urlInput) urlInput.value = '';
+    if (keyInput) keyInput.value = '';
+  }
+
+  async handleAdminUnlockSubmit() {
+    const passInput = document.getElementById('adminUnlockPasswordInput');
+    const alertBox = document.getElementById('adminUnlockAlert');
+    const btn = document.getElementById('btnAdminUnlockSubmit');
+    const password = passInput ? passInput.value.trim() : '';
+
+    if (!password) {
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.className = 'login-alert error';
+        alertBox.textContent = 'Por favor ingresa la contraseña de Administrador.';
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Verificando...';
+    }
+
+    try {
+      const isValid = await authService.verifyAdminPassword(password);
+      if (!isValid) {
+        if (alertBox) {
+          alertBox.style.display = 'block';
+          alertBox.className = 'login-alert error';
+          alertBox.textContent = '❌ Contraseña de Administrador incorrecta.';
+        }
+        return;
+      }
+
+      // Desbloqueo exitoso
+      this.showToast('🔓 Acceso de Administrador verificado.', 'success');
+
+      // Mostrar pestañas y desbloquear formulario de Supabase con credenciales precargadas
+      const tabsNav = document.getElementById('loginTabsNav');
+      if (tabsNav) tabsNav.style.display = 'flex';
+      this.switchLoginMode('supabase', true);
+    } catch (err) {
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.className = 'login-alert error';
+        alertBox.textContent = `❌ Error: ${err.message}`;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '🔓 Desbloquear Supabase';
+      }
+    }
+  }
+
+  switchLoginMode(mode = 'login', allowPreload = false) {
+    const now = Date.now();
+    if (this._lastModeSwitchTime && (now - this._lastModeSwitchTime) < 350) {
+      return;
+    }
+    this._lastModeSwitchTime = now;
+
+    const loginPanel = document.getElementById('loginFormTabPanel');
+    const verifyPanel = document.getElementById('adminVerifyTabPanel');
+    const supabaseBox = document.getElementById('initialSupabaseSetupBox');
+    const tabLogin = document.getElementById('tabBtnLogin');
+    const tabSupabase = document.getElementById('tabBtnSupabase');
+    const tabsNav = document.getElementById('loginTabsNav');
+    const isSupabaseConfigured = !!(this.appConfig?.cloud?.supabaseUrl && this.appConfig?.cloud?.supabaseAnonKey);
+
+    if (mode === 'admin-verify') {
+      if (loginPanel) loginPanel.style.display = 'none';
+      if (supabaseBox) supabaseBox.style.display = 'none';
+      if (verifyPanel) verifyPanel.style.display = 'block';
+      if (tabsNav) tabsNav.style.display = 'none';
+      const passInp = document.getElementById('adminUnlockPasswordInput');
+      const alertBox = document.getElementById('adminUnlockAlert');
+      if (passInp) {
+        passInp.value = '';
+        setTimeout(() => passInp.focus(), 150);
+      }
+      if (alertBox) alertBox.style.display = 'none';
+      return;
+    }
+
+    if (mode === 'supabase') {
+      if (loginPanel) loginPanel.style.display = 'none';
+      if (verifyPanel) verifyPanel.style.display = 'none';
+      if (supabaseBox) supabaseBox.style.display = 'block';
+      if (tabLogin) {
+        tabLogin.classList.remove('active');
+        tabLogin.setAttribute('aria-selected', 'false');
+      }
+      if (tabSupabase) {
+        tabSupabase.classList.add('active');
+        tabSupabase.setAttribute('aria-selected', 'true');
+      }
+
+      // Solo precargar credenciales si es primera vez o si fue desbloqueado explícitamente por el admin
+      const urlInput = document.getElementById('initSupabaseUrl');
+      const keyInput = document.getElementById('initSupabaseKey');
+      if (allowPreload || !isSupabaseConfigured) {
+        if (urlInput && !urlInput.value && this.appConfig?.cloud?.supabaseUrl) {
+          urlInput.value = this.appConfig.cloud.supabaseUrl;
+        }
+        if (keyInput && !keyInput.value && this.appConfig?.cloud?.supabaseAnonKey) {
+          keyInput.value = this.appConfig.cloud.supabaseAnonKey;
+        }
+      }
+
+      // Enfocar suavemente el primer campo de Supabase
+      setTimeout(() => {
+        if (urlInput && document.activeElement !== urlInput && !keyInput?.value) {
+          urlInput.focus({ preventScroll: true });
+        }
+      }, 150);
+    } else {
+      // mode === 'login'
+      if (verifyPanel) verifyPanel.style.display = 'none';
+      if (supabaseBox) supabaseBox.style.display = 'none';
+      if (loginPanel) loginPanel.style.display = 'block';
+      if (tabLogin) {
+        tabLogin.classList.add('active');
+        tabLogin.setAttribute('aria-selected', 'true');
+      }
+      if (tabSupabase) {
+        tabSupabase.classList.remove('active');
+        tabSupabase.setAttribute('aria-selected', 'false');
+      }
+
+      // Si Supabase ya está configurado y el admin vuelve al login, ocultar pestañas para el despachador
+      if (isSupabaseConfigured && !allowPreload) {
+        if (tabsNav) tabsNav.style.display = 'none';
+        this.clearSupabaseLoginInputs();
+      }
+    }
+  }
+
+  togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (btn) btn.textContent = '🙈';
+    } else {
+      input.type = 'password';
+      if (btn) btn.textContent = '👁️';
+    }
+  }
+
+  async pasteToInput(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          input.value = text.trim();
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          this.showToast('📋 Pegado desde portapapeles', 'info');
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Clipboard read failed:', err);
+    }
+    input.focus();
+    input.select();
+  }
+
+  toggleLoginCompactMode() {
+    const card = document.querySelector('.login-card-container');
+    const btn = document.getElementById('btnToggleLoginCompact');
+    if (!card) return;
+    const isCompact = card.classList.toggle('is-compact');
+    if (btn) {
+      btn.textContent = isCompact ? '↕️ Expandir' : '↕️ Ajustar';
+      btn.title = isCompact ? 'Restaurar espaciado normal' : 'Modo compacto para pantallas pequeñas';
+    }
   }
 
   async handleInitialSupabaseSetup() {
@@ -2243,12 +2437,38 @@ class App {
       this.renderDestinations(e.target.value);
     });
 
-    // Desplegable de configuración inicial de Supabase en login
+    // Desplegable / botón de configuración inicial de Supabase en login
     document.getElementById('btnToggleInitialSetup')?.addEventListener('click', () => {
-      const box = document.getElementById('initialSupabaseSetupBox');
-      if (box) {
-        box.style.display = box.style.display === 'none' ? 'block' : 'none';
-      }
+      this.switchLoginMode('supabase');
+    });
+
+    // Desbloqueo de Administrador para reconfigurar Supabase en el Login
+    const btnAdminUnlock = document.getElementById('btnAdminUnlockSupabase');
+    if (btnAdminUnlock) {
+      btnAdminUnlock.addEventListener('click', (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        this.switchLoginMode('admin-verify');
+      });
+    }
+
+    const adminVerifyForm = document.getElementById('adminVerifyForm');
+    if (adminVerifyForm) {
+      adminVerifyForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleAdminUnlockSubmit();
+      });
+    }
+
+    // Auto-scroll para evitar que el teclado virtual en móviles oculte los campos
+    document.querySelectorAll('.login-card-container input').forEach(input => {
+      input.addEventListener('focus', () => {
+        setTimeout(() => {
+          input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 250);
+      });
     });
 
     // Botón de cerrar sesión en la barra superior

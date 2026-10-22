@@ -1649,58 +1649,218 @@ body {
    ========================================================================== */
 .login-fullscreen-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 23, 42, 0.92);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  min-height: -webkit-fill-available;
+  background: rgba(15, 23, 42, 0.94);
   z-index: 99999;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding: 1rem;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  box-sizing: border-box;
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   animation: fadeIn 0.25s ease-out;
 }
 
 [data-theme="light"] .login-fullscreen-overlay {
-  background: rgba(241, 245, 249, 0.94);
+  background: rgba(241, 245, 249, 0.96);
 }
 
 .login-card-container {
+  margin: auto 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.45);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 440px;
-  padding: 2.25rem 2rem;
+  max-width: 450px;
+  padding: 1.85rem 1.65rem;
   box-sizing: border-box;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+/* Botón de ajuste de tamaño / modo compacto */
+.btn-login-adjust {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.725rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.15s ease;
+  z-index: 5;
+}
+
+.btn-login-adjust:hover {
+  color: var(--text-primary);
+  border-color: var(--brand-primary);
 }
 
 .login-brand-header {
   text-align: center;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.35rem;
+  transition: margin-bottom 0.2s ease;
 }
 
 .login-app-icon {
-  font-size: 3.25rem;
+  font-size: 3rem;
   line-height: 1;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   filter: drop-shadow(0 4px 8px rgba(79, 70, 229, 0.35));
+  transition: font-size 0.2s ease, margin 0.2s ease;
 }
 
 .login-app-title {
-  font-size: 1.5rem;
+  font-size: 1.45rem;
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
 }
 
 .login-app-tagline {
-  font-size: 0.85rem;
+  font-size: 0.825rem;
   color: var(--text-secondary);
-  margin-top: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+/* Selector de pestañas para Iniciar Sesión y Supabase */
+.login-tabs-nav {
+  display: flex;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.25rem;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.login-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.5rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.login-tab-btn.active {
+  background: var(--bg-card);
+  color: var(--brand-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  font-weight: 700;
+}
+
+/* Helpers para pegar y alternar visibilidad de contraseña */
+.btn-paste-helper {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--brand-primary);
+  font-size: 0.725rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.btn-paste-helper:hover,
+.btn-paste-helper:active {
+  background: var(--brand-primary);
+  color: #fff;
+}
+
+.input-with-toggle {
+  position: relative;
+}
+
+.btn-toggle-eye {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.05rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.btn-toggle-eye:hover,
+.btn-toggle-eye:active {
+  opacity: 1;
+}
+
+/* Scroll margin para inputs para que el teclado virtual nunca los tape */
+.login-card-container input {
+  scroll-margin-bottom: 130px;
+  scroll-margin-top: 40px;
+}
+
+/* Modo compacto manual o por pantalla reducida */
+.login-card-container.is-compact {
+  padding: 1.15rem 1rem;
+}
+
+.login-card-container.is-compact .login-brand-header {
+  margin-bottom: 0.75rem;
+}
+
+.login-card-container.is-compact .login-app-icon {
+  font-size: 2rem;
+  margin-bottom: 0.2rem;
+}
+
+.login-card-container.is-compact .login-app-title {
+  font-size: 1.2rem;
+}
+
+.login-card-container.is-compact .login-app-tagline {
+  display: none;
+}
+
+.login-card-container.is-compact .login-tabs-nav {
+  margin-bottom: 0.85rem;
 }
 
 .login-alert {
@@ -1712,6 +1872,89 @@ body {
   border: 1px solid var(--color-danger);
   color: var(--color-danger);
   font-weight: 600;
+}
+
+/* Botón estilizado y cómodo para desbloqueo de Administrador */
+.login-admin-unlock-wrap {
+  margin-top: 1.15rem;
+  text-align: center;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.85rem;
+}
+
+.btn-admin-reconfig {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 42px;
+  touch-action: manipulation;
+  width: 100%;
+}
+
+.btn-admin-reconfig:hover,
+.btn-admin-reconfig:active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--brand-primary);
+  transform: translateY(-1px);
+}
+
+/* Adaptación para pantallas móviles y alturas reducidas (iOS / Android) */
+@media (max-width: 640px), (max-height: 750px) {
+  .login-fullscreen-overlay {
+    padding: 0.5rem;
+    padding-top: max(0.4rem, env(safe-area-inset-top));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+    justify-content: flex-start;
+  }
+  .login-card-container {
+    margin: 0.25rem auto auto; /* Ubica la tarjeta bien arriba para que los campos queden altos y no queden bajos */
+    padding: 1rem 0.95rem;
+    max-width: 100%;
+    border-radius: var(--radius-md);
+  }
+  .login-brand-header {
+    margin-bottom: 0.65rem;
+  }
+  .login-app-icon {
+    font-size: 1.85rem;
+    margin-bottom: 0.15rem;
+  }
+  .login-app-title {
+    font-size: 1.2rem;
+  }
+  .login-app-tagline {
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+  }
+  .login-tabs-nav {
+    margin-bottom: 0.75rem;
+  }
+  .login-tab-btn {
+    padding: 0.45rem 0.35rem;
+    font-size: 0.8rem;
+  }
+  .supabase-setup-banner {
+    padding: 0.5rem 0.65rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .login-card-container .form-group {
+    margin-bottom: 0.75rem !important;
+  }
+  .login-card-container .form-input {
+    font-size: 16px !important;
+    padding: 0.5rem 0.65rem 0.5rem 2.25rem;
+  }
 }
 
 /* Barra de sesión en navbar */

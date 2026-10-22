@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css?v=1.6.2">
+  <link rel="stylesheet" href="index.css?v=1.6.5">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
 </head>
 <body>
@@ -17,71 +17,140 @@
   <!-- ======================================================== -->
   <div id="appLoginOverlay" class="login-fullscreen-overlay" style="display: none;">
     <div class="login-card-container">
+      <!-- Botón de ajuste de tamaño / modo compacto para móviles -->
+      <button type="button" id="btnToggleLoginCompact" class="btn-login-adjust" onclick="window.app.toggleLoginCompactMode()" title="Ajustar tamaño de pantalla / Compactar">
+        ↕️ Ajustar
+      </button>
+
       <div class="login-brand-header">
         <div class="login-app-icon">📦</div>
         <h1 class="login-app-title">Encargos & Apartados</h1>
-        <p class="login-app-tagline">Ingresa con tu usuario y contraseña para acceder al sistema</p>
+        <p class="login-app-tagline">Acceso al sistema y sincronización en la nube</p>
       </div>
 
-      <!-- Formulario Principal de Login -->
-      <form id="appLoginForm" onsubmit="event.preventDefault(); window.app.handleLoginSubmit();" class="login-form">
-        <div id="loginAlertBox" class="login-alert" style="display: none;"></div>
-
-        <div class="form-group" style="margin-bottom: 1.15rem;">
-          <label class="form-label" style="font-weight: 600;">Usuario o Correo:</label>
-          <div class="search-input-wrapper" style="border-radius: var(--radius-md);">
-            <span class="search-icon">👤</span>
-            <input type="text" id="loginUsernameInput" class="form-input" style="padding-left: 2.25rem;" placeholder="ej. admin o carlos" required autocomplete="username">
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 1.5rem;">
-          <label class="form-label" style="font-weight: 600;">Contraseña de Acceso:</label>
-          <div class="search-input-wrapper" style="border-radius: var(--radius-md);">
-            <span class="search-icon">🔑</span>
-            <input type="password" id="loginPasswordInput" class="form-input" style="padding-left: 2.25rem;" placeholder="••••••••" required autocomplete="current-password">
-          </div>
-        </div>
-
-        <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; font-weight: 700;">
-          Iniciar Sesión
+      <!-- Pestañas de Navegación: Iniciar Sesión vs Configurar Supabase -->
+      <div id="loginTabsNav" class="login-tabs-nav" role="tablist" style="display: none;">
+        <button type="button" id="tabBtnLogin" class="login-tab-btn active" role="tab" onclick="window.app.switchLoginMode('login')">
+          <span>🔑</span> Iniciar Sesión
         </button>
-      </form>
-
-      <!-- Botón de apertura de configuración inicial / primera vez -->
-      <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
-        <button type="button" id="btnToggleInitialSetup" class="btn-link" style="background: none; border: none; color: var(--brand-primary); font-size: 0.825rem; font-weight: 600; cursor: pointer; text-decoration: underline;" onclick="const b = document.getElementById('initialSupabaseSetupBox'); if(b) b.style.display = b.style.display === 'none' ? 'block' : 'none';">
-          ⚙️ ¿Primera vez en este dispositivo? Configurar Supabase
+        <button type="button" id="tabBtnSupabase" class="login-tab-btn" role="tab" onclick="window.app.switchLoginMode('supabase')">
+          <span>☁️</span> Conectar Supabase
         </button>
       </div>
 
-      <!-- Tarjeta Desplegable de Configuración Inicial de Supabase -->
-      <div id="initialSupabaseSetupBox" style="display: none; margin-top: 1rem; background: var(--bg-tertiary, #f8fafc); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; text-align: left;">
-        <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-          <span>☁️</span> Descargar Base de Datos desde Supabase
-        </h4>
-        <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 1rem;">
-          Ingresa la URL y Anon Key para sincronizar los usuarios y pedidos existentes en tu nube hacia este dispositivo:
-        </p>
+      <!-- TAB 1: Formulario Principal de Login -->
+      <div id="loginFormTabPanel" class="login-tab-panel">
+        <form id="appLoginForm" onsubmit="event.preventDefault(); window.app.handleLoginSubmit();" class="login-form">
+          <div id="loginAlertBox" class="login-alert" style="display: none;"></div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-weight: 600; font-size: 0.85rem;">Usuario o Correo:</label>
+            <div class="search-input-wrapper" style="border-radius: var(--radius-md);">
+              <span class="search-icon">👤</span>
+              <input type="text" id="loginUsernameInput" class="form-input" style="padding-left: 2.25rem;" placeholder="ej. admin o carlos" required autocomplete="username">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label class="form-label" style="font-weight: 600; font-size: 0.85rem;">Contraseña de Acceso:</label>
+            <div class="search-input-wrapper input-with-toggle" style="border-radius: var(--radius-md);">
+              <span class="search-icon">🔑</span>
+              <input type="password" id="loginPasswordInput" class="form-input" style="padding-left: 2.25rem; padding-right: 2.5rem;" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-eye" onclick="window.app.togglePasswordVisibility('loginPasswordInput', this)" title="Mostrar u ocultar contraseña">👁️</button>
+            </div>
+          </div>
+
+          <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; font-weight: 700;">
+            Iniciar Sesión
+          </button>
+        </form>
+
+        <!-- Enlace discreto de acceso protegido solo para el Administrador -->
+        <div id="loginAdminUnlockWrapper" class="login-admin-unlock-wrap" style="margin-top: 1.25rem; text-align: center; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;">
+          <button type="button" id="btnAdminUnlockSupabase" class="btn-admin-reconfig" onclick="event.stopPropagation(); window.app.switchLoginMode('admin-verify');">
+            <span>🔒</span> Reconfigurar Nube / Base de Datos
+          </button>
+        </div>
+      </div>
+
+      <!-- PANEL DE VERIFICACIÓN DE ADMINISTRADOR (INTEGRADO EN LA TARJETA) -->
+      <div id="adminVerifyTabPanel" class="admin-verify-panel" style="display: none;">
+        <div style="background: var(--bg-tertiary, #f8fafc); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.75rem 0.85rem; margin-bottom: 1rem;">
+          <div style="font-size: 0.925rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.45rem;">
+            <span>🔒</span> Acceso de Administrador
+          </div>
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.35rem 0 0; line-height: 1.35;">
+            Las credenciales de Supabase están protegidas para despachadores. Ingresa tu contraseña de Administrador para desbloquearlas:
+          </p>
+        </div>
+
+        <form id="adminVerifyForm" onsubmit="event.preventDefault(); window.app.handleAdminUnlockSubmit();">
+          <div id="adminUnlockAlert" class="login-alert" style="display: none; margin-bottom: 0.85rem;"></div>
+
+          <div class="form-group" style="margin-bottom: 1.15rem;">
+            <label class="form-label" style="font-size: 0.825rem; font-weight: 600;">Contraseña de Administrador:</label>
+            <div class="search-input-wrapper input-with-toggle" style="border-radius: var(--radius-md);">
+              <span class="search-icon">🔑</span>
+              <input type="password" id="adminUnlockPasswordInput" class="form-input" style="padding-left: 2.25rem; padding-right: 2.5rem; font-size: 16px;" placeholder="Contraseña de admin" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-eye" onclick="window.app.togglePasswordVisibility('adminUnlockPasswordInput', this)" title="Mostrar u ocultar contraseña">👁️</button>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <button type="submit" id="btnAdminUnlockSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.8rem; font-size: 0.95rem; font-weight: 700;">
+              🔓 Desbloquear Supabase
+            </button>
+            <button type="button" class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.825rem; padding: 0.5rem;" onclick="event.stopPropagation(); window.app.switchLoginMode('login');">
+              ← Cancelar y Volver
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- TAB 2: Tarjeta de Configuración Inicial de Supabase -->
+      <div id="initialSupabaseSetupBox" class="supabase-setup-panel" style="display: none;">
+        <div class="supabase-setup-banner" style="background: var(--bg-tertiary, #f8fafc); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.75rem 0.85rem; margin-bottom: 1rem;">
+          <div style="font-size: 0.925rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.45rem;">
+            <span>☁️</span> Descargar Base de Datos
+          </div>
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.35rem 0 0; line-height: 1.35;">
+            Ingresa la URL y Contraseña/Anon Key de tu proyecto Supabase para descargar y sincronizar tus datos en este móvil:
+          </p>
+        </div>
 
         <form id="initialSupabaseForm" onsubmit="event.preventDefault(); window.app.handleInitialSupabaseSetup();">
-          <div class="form-group" style="margin-bottom: 0.75rem;">
-            <label class="form-label" style="font-size: 0.78rem;">Supabase Project URL:</label>
-            <input type="text" id="initSupabaseUrl" class="form-input" style="font-size: 0.85rem;" placeholder="https://tu-proyecto.supabase.co" required>
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: 600; margin: 0;">Supabase Project URL:</label>
+              <button type="button" class="btn-paste-helper" onclick="window.app.pasteToInput('initSupabaseUrl')" title="Pegar desde portapapeles">📋 Pegar</button>
+            </div>
+            <div class="search-input-wrapper" style="border-radius: var(--radius-md);">
+              <span class="search-icon">🌐</span>
+              <input type="url" id="initSupabaseUrl" class="form-input" style="padding-left: 2.25rem;" placeholder="https://tu-proyecto.supabase.co" required autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="url">
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom: 1rem;">
-            <label class="form-label" style="font-size: 0.78rem;">Supabase Anon Key:</label>
-            <input type="password" id="initSupabaseKey" class="form-input" style="font-size: 0.85rem;" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required>
+
+          <div class="form-group" style="margin-bottom: 1.15rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: 600; margin: 0;">Supabase Anon Key / Contraseña:</label>
+              <button type="button" class="btn-paste-helper" onclick="window.app.pasteToInput('initSupabaseKey')" title="Pegar desde portapapeles">📋 Pegar</button>
+            </div>
+            <div class="search-input-wrapper input-with-toggle" style="border-radius: var(--radius-md);">
+              <span class="search-icon">🔑</span>
+              <input type="password" id="initSupabaseKey" class="form-input" style="padding-left: 2.25rem; padding-right: 2.5rem;" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." required autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+              <button type="button" class="btn-toggle-eye" onclick="window.app.togglePasswordVisibility('initSupabaseKey', this)" title="Mostrar u ocultar contraseña">👁️</button>
+            </div>
           </div>
-          <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-            <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;" onclick="document.getElementById('initialSupabaseSetupBox').style.display='none'">
-              Cancelar
-            </button>
-            <button type="submit" id="btnInitSupabaseSubmit" class="btn btn-primary" style="font-size: 0.8rem; padding: 0.35rem 0.85rem;">
+
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <button type="submit" id="btnInitSupabaseSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.8rem; font-size: 0.95rem; font-weight: 700;">
               📥 Guardar y Descargar Base
             </button>
+            <button type="button" class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.825rem; padding: 0.5rem;" onclick="window.app.switchLoginMode('login')">
+              ← Volver a Iniciar Sesión Local
+            </button>
           </div>
-          <div id="initSupabaseStatusBox" style="display: none; margin-top: 0.75rem; font-size: 0.8rem; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid transparent;"></div>
+          <div id="initSupabaseStatusBox" style="display: none; margin-top: 0.75rem; font-size: 0.8rem; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid transparent;"></div>
         </form>
       </div>
 
@@ -114,8 +183,8 @@
 
       <!-- Acciones de Cabecera -->
       <div class="navbar-actions">
-        <!-- Indicador de Red y Sincronización en Vivo -->
-        <span id="syncStatusBadge" class="meta-pill sync-badge" title="Estado de sincronización y red">
+        <!-- Indicador de Red y Sincronización en Vivo (Clic para ir a Configuración de Supabase) -->
+        <span id="syncStatusBadge" class="meta-pill sync-badge" title="Estado de sincronización y red (Toca para ir a Configuración de Supabase)" style="cursor: pointer;" onclick="window.app.switchView('settings')">
           <span class="sync-dot online"></span>
           <span id="syncStatusText">Verificando...</span>
         </span>
@@ -458,12 +527,21 @@
 
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label">Supabase URL:</label>
-                  <input type="text" id="setSupabaseUrl" class="form-input" placeholder="https://tu-proyecto.supabase.co">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label class="form-label" style="margin: 0;">Supabase URL:</label>
+                    <button type="button" class="btn-paste-helper" onclick="window.app.pasteToInput('setSupabaseUrl')" title="Pegar desde portapapeles">📋 Pegar</button>
+                  </div>
+                  <input type="text" id="setSupabaseUrl" class="form-input" placeholder="https://tu-proyecto.supabase.co" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Supabase Anon Key:</label>
-                  <input type="password" id="setSupabaseKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label class="form-label" style="margin: 0;">Supabase Anon Key:</label>
+                    <button type="button" class="btn-paste-helper" onclick="window.app.pasteToInput('setSupabaseKey')" title="Pegar desde portapapeles">📋 Pegar</button>
+                  </div>
+                  <div class="search-input-wrapper input-with-toggle" style="border-radius: var(--radius-md);">
+                    <input type="password" id="setSupabaseKey" class="form-input" style="padding-right: 2.5rem;" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+                    <button type="button" class="btn-toggle-eye" onclick="window.app.togglePasswordVisibility('setSupabaseKey', this)" title="Mostrar u ocultar contraseña">👁️</button>
+                  </div>
                 </div>
               </div>
 
@@ -931,6 +1009,7 @@
       </div>
     </div>
 
+
     <!-- CONTENEDOR DE TICKETS TÉRMICOS PARA IMPRESIÓN LIMPIA -->
     <div id="ticketPrintArea"></div>
 
@@ -947,6 +1026,6 @@
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js?v=1.6.2"></script>
+  <script type="module" src="src/app.js?v=1.6.5"></script>
 </body>
 </html>

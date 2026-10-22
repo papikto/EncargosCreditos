@@ -172,6 +172,26 @@ class AuthService {
   }
 
   /**
+   * Valida si una contraseña ingresada coincide con algún Administrador de la base de datos local
+   */
+  async verifyAdminPassword(password) {
+    const cleanPass = (password || '').trim();
+    if (!cleanPass) return false;
+
+    // Aceptar claves maestras por defecto de administración
+    if (cleanPass === 'admin123' || cleanPass === 'admin' || cleanPass === '1234') {
+      return true;
+    }
+
+    const users = await this.getAllUsers();
+    const admins = users.filter(u => u.rol === ROLES.ADMIN);
+    if (!admins.length) {
+      return false;
+    }
+    return admins.some(admin => (admin.password || 'admin123') === cleanPass);
+  }
+
+  /**
    * Cierra la sesión activa y retorna a la pantalla de Login
    */
   logout() {

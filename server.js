@@ -48,6 +48,13 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     };
 
+    // Prevenir caché para asegurar que cambios en JS/CSS/HTML se reflejen de inmediato
+    if (ext === '.html' || ext === '.json' || ext === '.js' || ext === '.css' || filePath.endsWith('sw.js')) {
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      headers['Pragma'] = 'no-cache';
+      headers['Expires'] = '0';
+    }
+
     if (ext === '.js' && filePath.endsWith('sw.js')) {
       headers['Service-Worker-Allowed'] = '/';
     }
@@ -57,6 +64,6 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[Servidor Local] Servidor ejecutándose en http://127.0.0.1:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[Servidor Local] Servidor ejecutándose en http://localhost:${PORT} y en red local (0.0.0.0:${PORT})`);
 });
