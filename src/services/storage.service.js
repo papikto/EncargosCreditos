@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'SistemaEncargosDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 class StorageService {
   constructor() {
@@ -51,6 +51,15 @@ class StorageService {
         if (!db.objectStoreNames.contains('users')) {
           const userStore = db.createObjectStore('users', { keyPath: 'id' });
           userStore.createIndex('rol', 'rol', { unique: false });
+        }
+
+        // Store de Productos e Inventario
+        if (!db.objectStoreNames.contains('products')) {
+          const productStore = db.createObjectStore('products', { keyPath: 'id' });
+          productStore.createIndex('nombre', 'nombre', { unique: false });
+          productStore.createIndex('categoria', 'categoria', { unique: false });
+          productStore.createIndex('sku', 'sku', { unique: false });
+          productStore.createIndex('ubicacion', 'ubicacion', { unique: false });
         }
       };
 
@@ -163,17 +172,19 @@ class StorageService {
     const orders = await this.getAll('orders');
     const destinations = await this.getAll('destinations');
     const users = await this.getAll('users');
+    const products = await this.getAll('products');
     const settings = await this.getSettings();
 
     return {
       appName: 'SistemaEncargosProductos',
-      version: '1.3.0',
+      version: '1.8.0',
       exportedAt: new Date().toISOString(),
       data: {
         customers,
         orders,
         destinations,
         users,
+        products,
         settings
       }
     };
@@ -186,7 +197,7 @@ class StorageService {
       throw new Error('Formato de respaldo inválido.');
     }
 
-    const { customers = [], orders = [], destinations = [], users = [], settings } = jsonData.data;
+    const { customers = [], orders = [], destinations = [], users = [], products = [], settings } = jsonData.data;
 
     // Guardar clientes
     for (const c of customers) {
@@ -206,6 +217,11 @@ class StorageService {
     // Guardar usuarios
     for (const u of users) {
       await this.put('users', u);
+    }
+
+    // Guardar productos de inventario
+    for (const p of products) {
+      await this.put('products', p);
     }
 
     // Guardar configuración si existe

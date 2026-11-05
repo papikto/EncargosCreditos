@@ -3,7 +3,7 @@
  * Manejo de modo Offline, Control de Versiones del App Shell y Actualizaciones Seguras.
  */
 
-const APP_VERSION = 'v1.7.4';
+const APP_VERSION = 'v1.8.0';
 const CACHE_NAME = `encargos-cache-${APP_VERSION}`;
 
 // Assets esenciales para funcionamiento 100% autónomo sin internet
@@ -22,7 +22,8 @@ const STATIC_ASSETS = [
   './src/services/sync.service.js',
   './src/services/supabase.service.js',
   './src/services/destination.service.js',
-  './src/services/auth.service.js'
+  './src/services/auth.service.js',
+  './src/services/product.service.js'
 ];
 
 // 1. INSTALACIÓN: Precaché de todos los recursos del App Shell y activación inmediata

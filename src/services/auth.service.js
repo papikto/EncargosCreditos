@@ -23,6 +23,8 @@ export const PERMISSIONS = {
   MANAGE_DESTINATIONS: 'manage_destinations',
   VIEW_CUSTOMERS: 'view_customers',
   MANAGE_CUSTOMERS: 'manage_customers',
+  VIEW_INVENTORY: 'view_inventory',
+  MANAGE_INVENTORY: 'manage_inventory',
   MANAGE_SETTINGS: 'manage_settings',
   MANAGE_USERS: 'manage_users',
   DATABASE_BACKUP_RESTORE: 'database_backup_restore'
@@ -39,7 +41,8 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.SEND_NOTIFICATIONS,
     PERMISSIONS.VIEW_DESTINATIONS,
     PERMISSIONS.MANAGE_DESTINATIONS,
-    PERMISSIONS.VIEW_CUSTOMERS
+    PERMISSIONS.VIEW_CUSTOMERS,
+    PERMISSIONS.VIEW_INVENTORY
   ]
 };
 

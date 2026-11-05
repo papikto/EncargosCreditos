@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css?v=1.7.4">
+  <link rel="stylesheet" href="index.css?v=1.8.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
 </head>
 <body>
@@ -256,6 +256,10 @@
         <span>📍</span> Destinos & Rutas
         <span id="destinationsCountBadge" class="tab-badge">0</span>
       </div>
+      <div class="nav-tab" id="navTabInventory" data-view="inventory">
+        <span>🏷️</span> Inventario & Catálogo
+        <span id="inventoryCountBadge" class="tab-badge">0</span>
+      </div>
       <div class="nav-tab" id="navTabCustomers" data-view="customers">
         <span>👥</span> Clientes
       </div>
@@ -396,6 +400,100 @@
           </div>
 
           <div id="destinationsListContainer" class="orders-list-grid"></div>
+        </div>
+      </section>
+
+      <!-- VISTA: INVENTARIO & CATÁLOGO DE PRODUCTOS (MODO ADMINISTRADOR) -->
+      <section id="view-inventory" class="view-section">
+        <!-- Métricas Principales de Inventario -->
+        <div class="metrics-grid inventory-metrics-grid">
+          <div class="metric-card orders">
+            <span class="metric-label">Productos en Catálogo</span>
+            <span class="metric-value" id="invMetricTotalProducts">0</span>
+            <span class="metric-hint">Artículos registrados</span>
+          </div>
+          <div class="metric-card collected">
+            <span class="metric-label">Stock Total (Unidades)</span>
+            <span class="metric-value" id="invMetricTotalUnits">0</span>
+            <span class="metric-hint">Existencias físicas</span>
+          </div>
+          <div class="metric-card debt">
+            <span class="metric-label">Inversión a Costo (Compra)</span>
+            <span class="metric-value" id="invMetricCostValue">$ 0.00</span>
+            <span class="metric-hint">Capital invertido en almacén</span>
+          </div>
+          <div class="metric-card collected">
+            <span class="metric-label">Valoración a Precio Venta</span>
+            <span class="metric-value" id="invMetricSaleValue">$ 0.00</span>
+            <span class="metric-hint">Recuperación estimada</span>
+          </div>
+          <div class="metric-card layaway">
+            <span class="metric-label">Margen Bruto Proyectado</span>
+            <span class="metric-value" id="invMetricGrossProfit" style="color: var(--color-success); font-weight: 800;">$ 0.00</span>
+            <span class="metric-hint" id="invMetricProfitMargin">0% ganancia potencial</span>
+          </div>
+          <div class="metric-card layaway" id="invCardAlertsBox">
+            <span class="metric-label">Alertas de Stock</span>
+            <span class="metric-value" id="invMetricAlerts" style="color: var(--color-danger); font-weight: 800;">0</span>
+            <span class="metric-hint" id="invMetricAlertsHint">Agotados o bajo mínimo</span>
+          </div>
+        </div>
+
+        <!-- Panel de Catálogo e Inventario -->
+        <div class="content-card">
+          <div class="card-header-flex" style="flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h2 class="card-title">🏷️ Catálogo de Productos & Gestión de Inventario</h2>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
+                Fotos ligeras vía link para no sobrecargar la base de datos, triple precio (Costo, Venta y Mayor), control de existencias, ubicación y cotización rápida para encargos.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary" onclick="window.app.openPriceCheckerModal()" title="Consultar precios al instante y generar texto para WhatsApp">
+                <span>⚡</span> Consultar Precios
+              </button>
+              <button type="button" class="btn btn-primary" onclick="window.app.openNewProductModal()" title="Agregar un nuevo producto al catálogo">
+                <span>➕</span> Nuevo Producto
+              </button>
+            </div>
+          </div>
+
+          <!-- Barra de Filtros y Búsqueda -->
+          <div class="inventory-toolbar-box">
+            <div class="search-input-wrapper" style="flex: 1; min-width: 250px;">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="inventorySearchInput" class="form-input" style="padding-left: 2.25rem;" placeholder="Buscar por producto, SKU, ubicación, categoría...">
+            </div>
+
+            <div class="inventory-toolbar-controls">
+              <select id="inventoryCategoryFilter" class="form-select" style="min-width: 160px;">
+                <option value="all">Todas las categorías</option>
+              </select>
+
+              <select id="inventoryStockFilter" class="form-select" style="min-width: 165px;">
+                <option value="all">Todos los stocks</option>
+                <option value="in_stock">🟢 Con Stock disponible</option>
+                <option value="low_stock">🟡 Stock Bajo (Mínimo)</option>
+                <option value="out_of_stock">🔴 Agotados (Stock 0)</option>
+              </select>
+
+              <!-- Conmutador de vista: Grid Cards vs Tabla -->
+              <div class="inventory-view-switcher" role="group">
+                <button type="button" id="btnInvViewCards" class="inv-toggle-btn active" onclick="window.app.setInventoryViewMode('cards')" title="Vista Cuadrícula de Tarjetas">
+                  🗂️ Cards
+                </button>
+                <button type="button" id="btnInvViewTable" class="inv-toggle-btn" onclick="window.app.setInventoryViewMode('table')" title="Vista Tabla Compacta">
+                  📄 Tabla
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Contenedor de Tarjetas (Cards Mode) -->
+          <div id="inventoryCardsContainer" class="inventory-cards-grid"></div>
+
+          <!-- Contenedor de Tabla (Table Mode) -->
+          <div id="inventoryTableContainer" class="inventory-table-container" style="display: none;"></div>
         </div>
       </section>
 
@@ -690,11 +788,16 @@
 
             <!-- Tabla de Ítems / Productos -->
             <div class="form-group">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
-                <label class="form-label">Productos Encargados:</label>
-                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="window.app.addNewItemRow()">
-                  ➕ Agregar Otro Producto
-                </button>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
+                <label class="form-label" style="margin: 0;">Productos Encargados:</label>
+                <div style="display: flex; gap: 0.4rem;">
+                  <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; background: var(--bg-tertiary); font-weight: 600;" onclick="window.app.openCatalogPickerForOrder()" title="Cargar producto registrado en el inventario con precios actualizados">
+                    🏷️ Cargar del Inventario
+                  </button>
+                  <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.55rem; font-size: 0.75rem;" onclick="window.app.addNewItemRow()">
+                    ➕ Fila Manual
+                  </button>
+                </div>
               </div>
               <div class="items-table-wrapper" id="newOrderItemsRows">
                 <!-- Filas dinámicas -->
@@ -1004,7 +1107,7 @@
         </div>
         <div class="modal-body" style="overflow-y: auto; flex: 1;">
           <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-            Ejecuta este script en el <strong>SQL Editor</strong> de tu proyecto en Supabase. Creará automáticamente las tablas (<code>customers</code>, <code>orders</code>, <code>destinations</code>, <code>users</code>, <code>settings</code>), configurará las políticas de seguridad (RLS para tu anon key) y activará la replicación en tiempo real (<strong>Realtime</strong> con <code>REPLICA IDENTITY FULL</code>).
+            Ejecuta este script en el <strong>SQL Editor</strong> de tu proyecto en Supabase. Creará automáticamente las tablas (<code>customers</code>, <code>orders</code>, <code>destinations</code>, <code>users</code>, <code>settings</code>, <code>products</code>), configurará las políticas de seguridad (RLS para tu anon key) y activará la replicación en tiempo real (<strong>Realtime</strong> con <code>REPLICA IDENTITY FULL</code>).
           </p>
           <pre style="background: var(--bg-tertiary, #0f172a); color: #38bdf8; padding: 1rem; border-radius: var(--radius-md); font-family: 'Consolas', 'Courier New', monospace; font-size: 0.78rem; overflow-x: auto; white-space: pre; border: 1px solid var(--border-color); max-height: 380px;"><code id="supabaseSqlCode">-- Cargando script...</code></pre>
         </div>
@@ -1015,6 +1118,245 @@
           <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('supabaseSqlModal')">
             Cerrar
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: GESTIÓN DE PRODUCTO / INVENTARIO                  -->
+    <!-- ======================================================== -->
+    <div id="productModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 650px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="productModalTitle">🏷️ Registrar Nuevo Producto</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('productModal')">✕</button>
+        </div>
+        <form id="productForm" onsubmit="event.preventDefault(); window.app.submitProductForm();">
+          <input type="hidden" id="prodEditId">
+          <div class="modal-body">
+            
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Nombre del Producto / Modelo: *</label>
+                <input type="text" id="prodNombreInput" class="form-input" placeholder="Ej. Zapatillas Nike Air Max 270" required>
+              </div>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label class="form-label" style="margin: 0;">SKU / Código:</label>
+                  <button type="button" class="btn-paste-helper" onclick="window.app.generateRandomSku()" title="Generar código automático">🎲 Generar</button>
+                </div>
+                <input type="text" id="prodSkuInput" class="form-input" placeholder="Ej. NK-AIR-270" style="text-transform: uppercase;">
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Categoría:</label>
+                <input type="text" id="prodCategoriaInput" class="form-input" list="prodCategorySuggestions" placeholder="Ej. Calzado, Electrónica, Ropa...">
+                <datalist id="prodCategorySuggestions">
+                  <option value="Calzado"></option>
+                  <option value="Ropa y Moda"></option>
+                  <option value="Electrónica"></option>
+                  <option value="Tecnología"></option>
+                  <option value="Accesorios"></option>
+                  <option value="Cosméticos y Cuidado"></option>
+                  <option value="Repuestos"></option>
+                  <option value="Hogar"></option>
+                </datalist>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ubicación Física (Almacén / Estante):</label>
+                <input type="text" id="prodUbicacionInput" class="form-input" placeholder="Ej. Almacén Central - Estante B-2">
+              </div>
+            </div>
+
+            <!-- Imagen por Link / URL Externa -->
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <label class="form-label" style="margin: 0;">Enlace de Imagen (URL Web Ligera):</label>
+                <button type="button" class="btn-paste-helper" onclick="window.app.pasteToInput('prodImagenUrlInput', () => window.app.updateProductImagePreview())" title="Pegar enlace de imagen">📋 Pegar</button>
+              </div>
+              <input type="url" id="prodImagenUrlInput" class="form-input" placeholder="https://ejemplo.com/foto-producto.jpg" oninput="window.app.updateProductImagePreview()">
+              <small style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                💡 Se almacena como link para mantener la base de datos veloz y ligera sin gastar megabytes de almacenamiento local ni nube.
+              </small>
+            </div>
+
+            <!-- Caja de Previsualización en Vivo de la Imagen -->
+            <div id="prodImagePreviewWrap" class="prod-image-preview-box">
+              <img id="prodImagePreview" src="" alt="Previsualización" style="display: none;" onerror="window.app.onProductImageError(this)">
+              <div id="prodImagePlaceholder" class="prod-image-placeholder">
+                <span style="font-size: 2rem;">🖼️</span>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">Sin imagen (o pega un link para vista previa)</span>
+              </div>
+            </div>
+
+            <!-- Triple Esquema de Precios -->
+            <div style="margin-top: 1rem; background: var(--bg-tertiary); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <label class="form-label" style="font-weight: 700; margin-bottom: 0.6rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                <span>💰</span> Esquema de Precios y Costos
+              </label>
+              <div class="form-grid-3">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.78rem;">Precio de Compra (Costo):</label>
+                  <input type="number" id="prodPrecioCompraInput" class="form-input" min="0" step="0.5" placeholder="0.00" oninput="window.app.calculateProductMarginPreview()">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: var(--color-success);">Precio Venta (Detal): *</label>
+                  <input type="number" id="prodPrecioVentaInput" class="form-input" min="0" step="0.5" placeholder="0.00" required oninput="window.app.calculateProductMarginPreview()">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: var(--brand-primary);">Precio al Mayor:</label>
+                  <input type="number" id="prodPrecioMayorInput" class="form-input" min="0" step="0.5" placeholder="0.00" oninput="window.app.calculateProductMarginPreview()">
+                </div>
+              </div>
+
+              <!-- Banner de Margen de Ganancia Calculado en Vivo -->
+              <div id="prodMarginLiveBanner" class="prod-margin-banner" style="margin-top: 0.75rem; font-size: 0.8rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); background: var(--bg-card); border: 1px solid var(--border-color);">
+                <span>Ganancia Detal: <strong id="marginDetalPreview">$ 0.00 (0%)</strong></span>
+                <span>Ganancia Mayor: <strong id="marginMayorPreview">$ 0.00 (0%)</strong></span>
+              </div>
+            </div>
+
+            <!-- Cantidad de Stock y Alerta de Stock Mínimo -->
+            <div class="form-grid-2" style="margin-top: 1rem;">
+              <div class="form-group">
+                <label class="form-label">Cantidad Actual en Stock: *</label>
+                <input type="number" id="prodStockInput" class="form-input" min="0" value="0" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Alerta de Stock Mínimo:</label>
+                <input type="number" id="prodStockMinimoInput" class="form-input" min="0" value="2" title="El sistema te alertará cuando el inventario llegue a este número">
+              </div>
+            </div>
+
+            <!-- Descripción y Notas -->
+            <div class="form-group">
+              <label class="form-label">Descripción del Producto (Tallas, Colores, Modelo):</label>
+              <textarea id="prodDescripcionInput" class="form-textarea" rows="2" placeholder="Ej. Tallas del 38 al 43, color negro con suela blanca, tejido ultra transpirable"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Notas Internas / Proveedor (Opcional):</label>
+              <input type="text" id="prodNotasInput" class="form-input" placeholder="Ej. Proveedor Importaciones Andes, contacto WhatsApp +58...">
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('productModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btnSaveProductSubmit">Guardar Producto</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: AJUSTE RÁPIDO DE STOCK                            -->
+    <!-- ======================================================== -->
+    <div id="stockAdjustModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">📦 Ajustar Stock de Producto</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('stockAdjustModal')">✕</button>
+        </div>
+        <form onsubmit="event.preventDefault(); window.app.submitStockAdjustment();">
+          <input type="hidden" id="stockAdjustProdId">
+          <div class="modal-body">
+            <div style="background: var(--bg-tertiary); padding: 0.85rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Producto:</div>
+              <div id="stockAdjustProdName" style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Nombre del Producto</div>
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.4rem;">
+                <span style="font-size: 0.825rem; color: var(--text-secondary);">Stock Actual Registrado:</span>
+                <span id="stockAdjustProdCurrent" style="font-size: 1.35rem; font-weight: 800; font-family: var(--font-mono); color: var(--brand-primary);">0 unidades</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Tipo de Movimiento:</label>
+              <div class="order-group-tabs-group" style="width: 100%; margin-bottom: 0.5rem;">
+                <button type="button" class="order-group-tab active" id="btnStockModeAdd" onclick="window.app.setStockAdjustMode('add')" style="flex: 1;">
+                  ➕ Añadir (+)
+                </button>
+                <button type="button" class="order-group-tab" id="btnStockModeSubtract" onclick="window.app.setStockAdjustMode('sub')" style="flex: 1;">
+                  ➖ Retirar (-)
+                </button>
+                <button type="button" class="order-group-tab" id="btnStockModeSet" onclick="window.app.setStockAdjustMode('set')" style="flex: 1;">
+                  🎯 Fijar Exacto (=)
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" id="stockAdjustAmountLabel">Cantidad de Unidades a Añadir:</label>
+              <input type="number" id="stockAdjustQuantityInput" class="form-input" min="1" value="1" required style="font-size: 1.1rem; font-weight: 700;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Motivo o Concepto:</label>
+              <select id="stockAdjustReasonSelect" class="form-select">
+                <option value="Recepción de Compra">📦 Recepción de Compra / Mercancía Nueva</option>
+                <option value="Venta Directa">🛒 Venta Directa en Local</option>
+                <option value="Devolución de Cliente">↩️ Devolución de Cliente</option>
+                <option value="Conteo Físico / Corrección">📋 Conteo Físico / Corrección de Inventario</option>
+                <option value="Merma o Daño">⚠️ Merma o Producto Dañado</option>
+                <option value="Otro">Otro motivo</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('stockAdjustModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Actualizar Stock</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: CONSULTOR RÁPIDO DE PRECIOS & COTIZADOR WHATSAPP   -->
+    <!-- ======================================================== -->
+    <div id="priceCheckerModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 680px; max-height: 88vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h3 class="modal-title">⚡ Consultor Rápido de Precios & Cotizador WhatsApp</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('priceCheckerModal')">✕</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; flex: 1; padding-bottom: 0.5rem;">
+          <div style="margin-bottom: 1rem;">
+            <div class="search-input-wrapper">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="priceCheckerSearchInput" class="form-input" style="padding-left: 2.25rem; font-size: 1rem;" placeholder="Escribe el nombre del producto, SKU o categoría..." oninput="window.app.renderPriceCheckerResults(this.value)">
+            </div>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
+              ℹ️ Responde precios al momento a clientes con el valor de venta al detal, precio mayorista, stock disponible y ubicación física en almacén.
+            </p>
+          </div>
+
+          <div id="priceCheckerResultsList" class="price-checker-results-grid"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('priceCheckerModal')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: SELECCIONAR PRODUCTO DEL INVENTARIO PARA ENCARGO  -->
+    <!-- ======================================================== -->
+    <div id="catalogOrderPickerModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 650px; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h3 class="modal-title">🏷️ Cargar Producto del Inventario al Encargo</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('catalogOrderPickerModal')">✕</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; flex: 1;">
+          <div class="search-input-wrapper" style="margin-bottom: 1rem;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="catalogPickerSearchInput" class="form-input" style="padding-left: 2.25rem;" placeholder="Filtrar catálogo..." oninput="window.app.renderCatalogOrderPickerList(this.value)">
+          </div>
+          <div id="catalogOrderPickerList" class="catalog-picker-list"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('catalogOrderPickerModal')">Cerrar</button>
         </div>
       </div>
     </div>
@@ -1036,6 +1378,6 @@
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js?v=1.7.4"></script>
+  <script type="module" src="src/app.js?v=1.8.0"></script>
 </body>
 </html>

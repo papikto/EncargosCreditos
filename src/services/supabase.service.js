@@ -20,7 +20,7 @@
 import { storageService } from './storage.service.js';
 
 // Tablas principales del sistema
-export const SYNC_TABLES = ['customers', 'orders', 'destinations', 'users', 'settings'];
+export const SYNC_TABLES = ['customers', 'orders', 'destinations', 'users', 'settings', 'products'];
 
 // Clave para almacenamiento de cola offline y columnas no soportadas en Supabase
 const OFFLINE_QUEUE_KEY = 'supabase_offline_queue_v1';
@@ -384,7 +384,8 @@ class SupabaseService {
       destinations: new Set(),
       customers: new Set(),
       users: new Set(),
-      settings: new Set()
+      settings: new Set(),
+      products: new Set()
     };
     // Limpiar caché obsoleto de localStorage para permitir que columnas recién creadas se envíen
     try {
@@ -408,7 +409,8 @@ class SupabaseService {
       destinations: new Set(),
       customers: new Set(),
       users: new Set(),
-      settings: new Set()
+      settings: new Set(),
+      products: new Set()
     };
     try {
       localStorage.removeItem(UNSUPPORTED_COLUMNS_KEY);
@@ -1029,6 +1031,26 @@ CREATE TABLE IF NOT EXISTS public.settings (
     "updatedAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
+-- 6. TABLA: Catálogo e Inventario de Productos (products)
+CREATE TABLE IF NOT EXISTS public.products (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    sku TEXT,
+    categoria TEXT DEFAULT 'General',
+    "imagenUrl" TEXT,
+    "precioCompra" NUMERIC DEFAULT 0,
+    "precioVenta" NUMERIC DEFAULT 0,
+    "precioMayor" NUMERIC DEFAULT 0,
+    ubicacion TEXT,
+    stock INTEGER DEFAULT 0,
+    "stockMinimo" INTEGER DEFAULT 1,
+    notas TEXT,
+    activo BOOLEAN DEFAULT true,
+    "updatedAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
+    "createdAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
+);
+
 -- ============================================================
 -- MIGRACIÓN / ACTUALIZACIÓN AUTOMÁTICA DE COLUMNAS NUEVAS
 -- (Si ya creaste las tablas antes, estas líneas añaden columnas faltantes sin borrar datos)
@@ -1049,6 +1071,11 @@ ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "lat" NUMERIC;
 ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "lng" NUMERIC;
 ALTER TABLE public.destinations ADD COLUMN IF NOT EXISTS "notas" TEXT;
 
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "precioMayor" NUMERIC DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "ubicacion" TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "imagenUrl" TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "stockMinimo" INTEGER DEFAULT 1;
+
 -- Recargar caché del esquema en Supabase PostgREST
 NOTIFY pgrst, 'reload schema';
 
@@ -1061,6 +1088,7 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.destinations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
 DO $$ 
 BEGIN
@@ -1079,6 +1107,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acceso total anon settings') THEN
     CREATE POLICY "Acceso total anon settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acceso total anon products') THEN
+    CREATE POLICY "Acceso total anon products" ON public.products FOR ALL USING (true) WITH CHECK (true);
+  END IF;
 END $$;
 
 -- ============================================================
@@ -1090,6 +1121,7 @@ ALTER TABLE public.orders REPLICA IDENTITY FULL;
 ALTER TABLE public.destinations REPLICA IDENTITY FULL;
 ALTER TABLE public.users REPLICA IDENTITY FULL;
 ALTER TABLE public.settings REPLICA IDENTITY FULL;
+ALTER TABLE public.products REPLICA IDENTITY FULL;
 
 -- ============================================================
 -- HABILITAR REALTIME EN LA PUBLICACIÓN DE SUPABASE
@@ -1116,6 +1148,10 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.settings;
   EXCEPTION WHEN duplicate_object THEN NULL;
   END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
 END $$;
 `;
   }
@@ -1129,7 +1165,8 @@ END $$;
       orders: 'orders',
       destinations: 'destinations',
       users: 'users',
-      settings: 'settings'
+      settings: 'settings',
+      products: 'products'
     };
     return map[table] || null;
   }
