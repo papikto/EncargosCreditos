@@ -135,6 +135,28 @@ class AuthService {
   async getAllUsers() {
     await storageService.ready();
     const users = await storageService.getAll('users');
+    for (const u of users) {
+      let needsUpdate = false;
+      if (!u.usuario) {
+        u.usuario = u.email ? u.email.split('@')[0] : (u.nombre ? u.nombre.toLowerCase().replace(/\s+/g, '') : 'usuario');
+        needsUpdate = true;
+      }
+      if (!u.password) {
+        u.password = u.rol === ROLES.ADMIN ? 'admin123' : '1234';
+        needsUpdate = true;
+      }
+      if (!u.cargoTitulo) {
+        u.cargoTitulo = u.rol === ROLES.ADMIN ? 'Administrador General' : 'Despachador / Logística';
+        needsUpdate = true;
+      }
+      if (!u.avatar) {
+        u.avatar = u.rol === ROLES.ADMIN ? '👑' : '🚚';
+        needsUpdate = true;
+      }
+      if (needsUpdate) {
+        await storageService.put('users', u);
+      }
+    }
     return users.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
   }
 
@@ -152,7 +174,9 @@ class AuthService {
     const users = await this.getAllUsers();
     const user = users.find(u => 
       (u.usuario && u.usuario.toLowerCase() === cleanId) || 
-      (u.email && u.email.toLowerCase() === cleanId)
+      (u.email && u.email.toLowerCase() === cleanId) ||
+      (u.nombre && u.nombre.toLowerCase().trim() === cleanId) ||
+      (u.nombre && u.nombre.toLowerCase().split(' ')[0] === cleanId)
     );
 
     if (!user) {
@@ -160,7 +184,7 @@ class AuthService {
     }
 
     // Verificar contraseña (con fallback a contraseña por defecto si se creó sin clave)
-    const validPass = user.password || '1234';
+    const validPass = user.password || (user.rol === ROLES.ADMIN ? 'admin123' : '1234');
     if (cleanPass !== validPass) {
       return { success: false, message: 'Contraseña incorrecta.' };
     }

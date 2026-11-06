@@ -50,14 +50,14 @@ class CloudService {
     } catch (err) {
       const cleanUrl = url.replace(/\/+$/, '');
       try {
-        const response = await fetch(`${cleanUrl}/rest/v1/`, {
+        const response = await fetch(`${cleanUrl}/rest/v1/orders?select=id&limit=1`, {
           headers: {
             'apikey': anonKey,
             'Authorization': `Bearer ${anonKey}`
           }
         });
-        if (response.ok || response.status === 200 || response.status === 404) {
-          return { success: true, message: '¡Conexión básica establecida con el endpoint REST de Supabase!' };
+        if (response.ok || response.status === 200 || response.status === 404 || response.status === 400) {
+          return { success: true, message: '¡Conexión básica establecida con las tablas de Supabase!' };
         } else {
           return { success: false, message: `Respuesta del servidor: HTTP ${response.status} ${response.statusText}` };
         }

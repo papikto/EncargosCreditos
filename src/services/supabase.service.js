@@ -893,26 +893,15 @@ class SupabaseService {
     const cleanKey = anonKey.trim();
 
     try {
-      // 1. Probar Endpoint REST con API Key
-      const restRes = await fetch(`${cleanUrl}/rest/v1/`, {
-        headers: {
-          'apikey': cleanKey,
-          'Authorization': `Bearer ${cleanKey}`
-        }
+      // 1. Inicializar cliente con el SDK para verificar acceso real a tablas
+      // Nota: No consultar la raíz /rest/v1/ porque las nuevas claves publishable de Supabase (sb_publishable_...) 
+      // restringen la raíz de metadatos OpenAPI a claves secretas (HTTP 401), pero permiten acceso pleno a las tablas.
+      const sdk = await this.getSDK();
+      const testClient = sdk.createClient(cleanUrl, cleanKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
 
-      if (!restRes.ok && restRes.status !== 404 && restRes.status !== 200) {
-        return {
-          success: false,
-          message: `Respuesta del servidor Supabase: HTTP ${restRes.status} ${restRes.statusText}`
-        };
-      }
-
-      // 2. Verificar el SDK y acceso a tablas
-      const sdk = await this.getSDK();
-      const testClient = sdk.createClient(cleanUrl, cleanKey);
-
-      // Consulta de prueba a la tabla 'orders'
+      // 2. Consulta de prueba a la tabla 'orders'
       const { data, error } = await testClient
         .from('orders')
         .select('id')
@@ -924,6 +913,12 @@ class SupabaseService {
             success: true,
             warning: true,
             message: '¡Conexión establecida con Supabase! ⚠️ Las tablas aún no han sido creadas. Utiliza el botón "Ver Script SQL para Supabase" para crearlas en 1 clic.'
+          };
+        }
+        if (error.message?.includes('API key') || error.code === 'PGRST301' || error.message?.includes('JWT')) {
+          return {
+            success: false,
+            message: `Llave API inválida o incorrecta: ${error.message}`
           };
         }
         return {
@@ -1124,6 +1119,11 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "precioMayor" NUMERIC DEFAU
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "ubicacion" TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "imagenUrl" TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "stockMinimo" INTEGER DEFAULT 1;
+
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "usuario" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "password" TEXT DEFAULT '1234';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "cargoTitulo" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "avatar" TEXT;
 
 -- Recargar caché del esquema en Supabase PostgREST
 NOTIFY pgrst, 'reload schema';

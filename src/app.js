@@ -2341,11 +2341,11 @@ class App {
     const brandTag = document.querySelector('.brand-tag');
     if (brandTag && current) {
       if (authService.isSimulatedDispatcher()) {
-        brandTag.textContent = `v1.8.2 (Modo Ruta / Despacho)`;
+        brandTag.textContent = `v1.8.3 (Modo Ruta / Despacho)`;
       } else if (isAdmin) {
-        brandTag.textContent = `v1.8.2 (Administrador)`;
+        brandTag.textContent = `v1.8.3 (Administrador)`;
       } else {
-        brandTag.textContent = `v1.8.2 (Despachador)`;
+        brandTag.textContent = `v1.8.3 (Despachador)`;
       }
     }
   }
@@ -2704,13 +2704,36 @@ class App {
     const ok = confirm('¿Deseas descargar toda la base de datos desde Supabase y reiniciar la aplicación?');
     if (!ok) return;
 
+    const urlInput = document.getElementById('setSupabaseUrl');
+    const keyInput = document.getElementById('setSupabaseKey');
+    let url = urlInput ? urlInput.value.trim() : '';
+    const key = keyInput ? keyInput.value.trim() : '';
+
+    // Si hay credenciales escritas en la pantalla de Ajustes, guardarlas primero
+    if (url && key) {
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+        if (urlInput) urlInput.value = url;
+      }
+      const currentSettings = await storageService.getSettings();
+      currentSettings.cloud = currentSettings.cloud || {};
+      currentSettings.cloud.provider = 'supabase';
+      currentSettings.cloud.supabaseUrl = url;
+      currentSettings.cloud.supabaseAnonKey = key;
+      await storageService.saveSettings(currentSettings);
+      this.appConfig = currentSettings;
+      await supabaseService.initClient(url, key, true);
+    } else {
+      await supabaseService.initFromSettings();
+    }
+
     this.showToast('Descargando base de datos desde Supabase...', 'info');
     try {
-      await supabaseService.initFromSettings();
       const res = await supabaseService.syncAll();
       if (res.success) {
+        await authService.init();
         this.showToast('✅ Descarga completa. Reiniciando en 1 segundo...', 'success');
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => window.location.reload(), 1200);
       } else {
         alert('Error al descargar: ' + (res.error || 'No se pudo conectar'));
       }
