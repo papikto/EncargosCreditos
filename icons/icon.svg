@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  
+  <!-- Fondo Redondeado -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  
+  <!-- Contorno sutil -->
+  <rect x="2" y="2" width="508" height="508" rx="113" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4" />
+  
+  <!-- Icono de Caja de Envíos / Paquete en Perspectiva Isométrica -->
+  <g filter="url(#shadow)" transform="translate(256, 260)">
+    <!-- Tapa Izquierda -->
+    <path d="M 0,-100 L -120,-30 L 0,40 L 120,-30 Z" fill="#fbbf24" stroke="#d97706" stroke-width="4" stroke-linejoin="round"/>
+    
+    <!-- Cara Frontal Izquierda -->
+    <path d="M -120,-30 L 0,40 L 0,140 L -120,70 Z" fill="#f59e0b" stroke="#d97706" stroke-width="4" stroke-linejoin="round"/>
+    
+    <!-- Cara Frontal Derecha -->
+    <path d="M 0,40 L 120,-30 L 120,70 L 0,140 Z" fill="#d97706" stroke="#b45309" stroke-width="4" stroke-linejoin="round"/>
+    
+    <!-- Cinta Adhesiva de Embalaje Superior -->
+    <path d="M -30,-82 L 30,-47 L 0,-30 L -60,-65 Z" fill="#92400e" opacity="0.3"/>
+    <path d="M -40,-77 L 40,-31 L 0, -8 L -80,-54 Z" fill="#fbbf24" opacity="0.8"/>
+    
+    <!-- Flechas / Símbolo de Entrega Rápida -->
+    <circle cx="0" cy="18" r="32" fill="#ffffff" />
+    <path d="M -12,18 L 8,18 M 2,10 L 12,18 L 2,26" fill="none" stroke="#4f46e5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

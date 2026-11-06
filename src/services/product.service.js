@@ -15,6 +15,9 @@
 import { storageService } from './storage.service.js';
 import { supabaseService } from './supabase.service.js';
 
+const PRODUCT_SEED_FLAG = 'products_seed_v1_completed';
+const DELETED_PRODUCTS_KEY = 'deleted_products_v1';
+
 class ProductService {
   generateId() {
     return 'PRD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -28,7 +31,16 @@ class ProductService {
     await this.seedDefaultProductsIfEmpty();
     const products = await storageService.getAll('products');
     
-    const filtered = includeInactive ? products : products.filter(p => p.activo !== false);
+    let deletedIds = [];
+    try {
+      deletedIds = JSON.parse(localStorage.getItem(DELETED_PRODUCTS_KEY) || '[]');
+    } catch (e) {}
+
+    const nonDeleted = Array.isArray(deletedIds) && deletedIds.length > 0
+      ? products.filter(p => !deletedIds.includes(p.id))
+      : products;
+
+    const filtered = includeInactive ? nonDeleted : nonDeleted.filter(p => p.activo !== false);
     
     // Ordenar alfabéticamente por nombre
     return filtered.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
@@ -72,6 +84,18 @@ class ProductService {
     };
 
     // Guardar en IndexedDB local
+    localStorage.setItem(PRODUCT_SEED_FLAG, 'true');
+    // Si estaba marcado en lista de eliminados, removerlo
+    if (productData.id) {
+      try {
+        let deleted = JSON.parse(localStorage.getItem(DELETED_PRODUCTS_KEY) || '[]');
+        if (deleted.includes(productData.id)) {
+          deleted = deleted.filter(x => x !== productData.id);
+          localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify(deleted));
+        }
+      } catch (e) {}
+    }
+
     await storageService.put('products', product);
 
     // Enviar a Supabase si la nube está configurada (no bloqueante)
@@ -88,6 +112,16 @@ class ProductService {
    */
   async deleteProduct(id) {
     if (!id) return false;
+    localStorage.setItem(PRODUCT_SEED_FLAG, 'true');
+
+    try {
+      let deleted = JSON.parse(localStorage.getItem(DELETED_PRODUCTS_KEY) || '[]');
+      if (!deleted.includes(id)) {
+        deleted.push(id);
+        localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify(deleted));
+      }
+    } catch (e) {}
+
     supabaseService.pushDelete('products', id).catch(() => {});
     return storageService.delete('products', id);
   }
@@ -111,6 +145,18 @@ class ProductService {
 
     product.stock = newStock;
     product.updatedAt = new Date().toISOString();
+
+    localStorage.setItem(PRODUCT_SEED_FLAG, 'true');
+    // Si estaba marcado en lista de eliminados, removerlo
+    if (productData.id) {
+      try {
+        let deleted = JSON.parse(localStorage.getItem(DELETED_PRODUCTS_KEY) || '[]');
+        if (deleted.includes(productData.id)) {
+          deleted = deleted.filter(x => x !== productData.id);
+          localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify(deleted));
+        }
+      } catch (e) {}
+    }
 
     await storageService.put('products', product);
     supabaseService.pushRecord('products', product).catch(() => {});
@@ -241,8 +287,19 @@ ${p.ubicacion ? `📍 Ubicación: ${p.ubicacion}\n` : ''}
    * con imágenes ligeras vía link de Unsplash para que el usuario explore el catálogo.
    */
   async seedDefaultProductsIfEmpty() {
+    // Si ya se procesó la siembra inicial alguna vez en este navegador, NUNCA volver a sembrar
+    if (localStorage.getItem(PRODUCT_SEED_FLAG) === 'true') {
+      return;
+    }
+
     const existing = await storageService.getAll('products');
-    if (existing && existing.length > 0) return;
+    if (existing && existing.length > 0) {
+      localStorage.setItem(PRODUCT_SEED_FLAG, 'true');
+      return;
+    }
+
+    // Marcar como sembrado de inmediato para que si el usuario los elimina no vuelvan a aparecer
+    localStorage.setItem(PRODUCT_SEED_FLAG, 'true');
 
     const defaultProducts = [
       {

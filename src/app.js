@@ -39,6 +39,7 @@ class App {
 
     // 3. Registrar e inicializar Service Worker (PWA Offline & Actualizaciones)
     this.initServiceWorker();
+    this.setupPwaInstallHandlers();
 
     // 4. Inicializar sincronizador y guardián anti-colisión
     this.initSync();
@@ -218,6 +219,119 @@ class App {
     } catch (err) {
       console.warn('[App] Error al buscar actualización:', err);
       if (manual) this.showToast('Error al comprobar versión: ' + err.message, 'danger');
+    }
+  }
+
+  // ==========================================
+  // Manejo de Instalación PWA (Android / iOS / PC)
+  // ==========================================
+  setupPwaInstallHandlers() {
+    this.deferredInstallPrompt = null;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    this.updatePwaStatusUI(isStandalone);
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredInstallPrompt = e;
+      console.log('[PWA] Evento beforeinstallprompt capturado. Listo para instalación en Android/PC.');
+
+      if (!isStandalone) {
+        const dismissed = sessionStorage.getItem('pwa_banner_dismissed') === 'true';
+        if (!dismissed) {
+          const banner = document.getElementById('pwaInstallBanner');
+          if (banner) banner.style.display = 'flex';
+        }
+
+        const navBtn = document.getElementById('btnInstallPwaNavbar');
+        if (navBtn) navBtn.style.display = 'inline-flex';
+
+        this.updatePwaStatusUI(false, true);
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('[PWA] Aplicación instalada exitosamente.');
+      this.deferredInstallPrompt = null;
+      this.hidePwaBanner();
+      this.updatePwaStatusUI(true);
+      this.showToast('🎉 ¡Sistema de Encargos instalado exitosamente en tu teléfono!');
+    });
+
+    try {
+      window.matchMedia('(display-mode: standalone)').addEventListener('change', (evt) => {
+        this.updatePwaStatusUI(evt.matches);
+      });
+    } catch (e) {}
+  }
+
+  async triggerPwaInstall() {
+    if (this.deferredInstallPrompt) {
+      try {
+        this.deferredInstallPrompt.prompt();
+        const { outcome } = await this.deferredInstallPrompt.userChoice;
+        console.log(`[PWA] Elección del usuario: ${outcome}`);
+        if (outcome === 'accepted') {
+          this.showToast('📲 Instalando en el dispositivo...');
+          this.hidePwaBanner();
+          this.closeModal('pwaInstallModal');
+        }
+        this.deferredInstallPrompt = null;
+      } catch (err) {
+        console.warn('[PWA] Error al invocar prompt:', err);
+        this.openPwaHelpModal();
+      }
+    } else {
+      this.openPwaHelpModal();
+    }
+  }
+
+  dismissPwaBanner() {
+    this.hidePwaBanner();
+    sessionStorage.setItem('pwa_banner_dismissed', 'true');
+  }
+
+  hidePwaBanner() {
+    const banner = document.getElementById('pwaInstallBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  openPwaHelpModal() {
+    this.openModal('pwaInstallModal');
+  }
+
+  updatePwaStatusUI(isInstalled, canPrompt = false) {
+    const badge = document.getElementById('pwaSettingsStatusBadge');
+    const settingsBtn = document.getElementById('btnInstallPwaSettings');
+    const navBtn = document.getElementById('btnInstallPwaNavbar');
+
+    if (isInstalled) {
+      if (badge) {
+        badge.innerHTML = '🟢 App Instalada (Standalone)';
+        badge.style.color = 'var(--color-success)';
+      }
+      if (settingsBtn) {
+        settingsBtn.innerHTML = '<span>✅</span> Aplicación ya Instalada';
+        settingsBtn.classList.remove('btn-primary');
+        settingsBtn.classList.add('btn-secondary');
+      }
+      if (navBtn) navBtn.style.display = 'none';
+      this.hidePwaBanner();
+    } else if (canPrompt) {
+      if (badge) {
+        badge.innerHTML = '📲 Lista para Instalar (1 Clic)';
+        badge.style.color = 'var(--brand-primary)';
+      }
+      if (settingsBtn) {
+        settingsBtn.innerHTML = '<span>📲</span> Instalar en este Dispositivo';
+        settingsBtn.classList.add('btn-primary');
+        settingsBtn.classList.remove('btn-secondary');
+      }
+    } else {
+      if (badge) {
+        badge.innerHTML = '🌐 Modo Navegador Web';
+        badge.style.color = 'var(--text-secondary)';
+      }
     }
   }
 
@@ -1650,10 +1764,7 @@ class App {
       }
       if (placeholder) {
         placeholder.style.display = 'flex';
-        placeholder.innerHTML = `
-          <span style="font-size: 2rem;">🖼️</span>
-          <span style="font-size: 0.8rem; color: var(--text-muted);">Sin imagen (pega un link para previsualizar)</span>
-        `;
+        placeholder.innerHTML = `<span style="font-size: 1.5rem;">🖼️</span>`;
       }
     }
   }
@@ -1664,13 +1775,12 @@ class App {
   onProductImageError(imgEl) {
     if (!imgEl) return;
     imgEl.style.display = 'none';
-    const placeholder = imgEl.parentElement?.querySelector('.prod-image-placeholder') || imgEl.parentElement?.querySelector('.product-card-img-placeholder');
+    const placeholder = imgEl.parentElement?.querySelector('.prod-image-placeholder') || 
+                        imgEl.parentElement?.querySelector('.prod-image-placeholder-thumb') || 
+                        imgEl.parentElement?.querySelector('.product-card-img-placeholder');
     if (placeholder) {
       placeholder.style.display = 'flex';
-      placeholder.innerHTML = `
-        <span style="font-size: 2rem;">⚠️</span>
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Enlace roto o imagen no disponible</span>
-      `;
+      placeholder.innerHTML = `<span style="font-size: 1.3rem;" title="Enlace roto o imagen no disponible">⚠️</span>`;
     }
   }
 
@@ -2231,11 +2341,11 @@ class App {
     const brandTag = document.querySelector('.brand-tag');
     if (brandTag && current) {
       if (authService.isSimulatedDispatcher()) {
-        brandTag.textContent = `v1.8.0 (Modo Ruta / Despacho)`;
+        brandTag.textContent = `v1.8.2 (Modo Ruta / Despacho)`;
       } else if (isAdmin) {
-        brandTag.textContent = `v1.8.0 (Administrador)`;
+        brandTag.textContent = `v1.8.2 (Administrador)`;
       } else {
-        brandTag.textContent = `v1.8.0 (Despachador)`;
+        brandTag.textContent = `v1.8.2 (Despachador)`;
       }
     }
   }

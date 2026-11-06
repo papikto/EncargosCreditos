@@ -6,10 +6,15 @@
   <meta name="theme-color" content="#4f46e5">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Encargos">
   <title>Sistema de Encargos, Envíos y Apartados</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="index.css?v=1.8.0">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="stylesheet" href="index.css?v=1.8.2">
 </head>
 <body>
   <!-- ======================================================== -->
@@ -213,6 +218,10 @@
           🌙
         </button>
 
+        <button type="button" id="btnInstallPwaNavbar" class="btn btn-secondary btn-install-pwa" onclick="window.app.triggerPwaInstall()" title="Instalar aplicación en tu teléfono Android o PC" style="display: none;">
+          <span>📲</span> <span class="nav-btn-text">Instalar App</span>
+        </button>
+
         <button id="btnForceReload" class="btn btn-icon" title="Forzar actualización y limpiar caché del navegador" onclick="window.app.forcePurgeAndReload()">
           🔄
         </button>
@@ -232,6 +241,21 @@
       <div class="update-banner-actions">
         <button id="btnDismissUpdate" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">Más tarde</button>
         <button id="btnApplyUpdate" class="btn btn-success" style="padding: 0.25rem 0.8rem; font-size: 0.8rem;">Actualizar Ahora</button>
+      </div>
+    </div>
+
+    <!-- BANNER DE INSTALACIÓN PWA (MÓVIL / ESCRITORIO) -->
+    <div id="pwaInstallBanner" class="pwa-install-banner" style="display: none;">
+      <div class="pwa-banner-content">
+        <span class="pwa-banner-icon">📲</span>
+        <div class="pwa-banner-text">
+          <strong>Instalar Sistema en tu Teléfono</strong>
+          <small>Disfruta de modo pantalla completa, acceso directo en inicio y uso 100% offline.</small>
+        </div>
+      </div>
+      <div class="pwa-banner-actions">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="window.app.dismissPwaBanner()">Ahora no</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="window.app.triggerPwaInstall()">Instalar App</button>
       </div>
     </div>
 
@@ -714,6 +738,29 @@
             </button>
           </div>
         </div>
+
+        <!-- TARJETA: INSTALACIÓN EN DISPOSITIVOS MÓVILES (PWA ANDROID / IOS) -->
+        <div id="pwaManagementSection" class="content-card" style="margin-top: 1.5rem;">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title" style="margin-bottom: 0.25rem;">📱 Aplicación Móvil (PWA Android / iOS / PC)</h2>
+              <p style="font-size: 0.85rem; color: var(--text-secondary);">
+                Instala el sistema directamente en la pantalla de inicio de tu celular para abrirlo como una app nativa sin barras de navegador y usarlo 100% sin conexión a internet.
+              </p>
+            </div>
+            <div id="pwaSettingsStatusBadge" class="meta-pill" style="font-size: 0.78rem; font-weight: 700; background: var(--bg-tertiary);">
+              🔍 Verificando estado PWA...
+            </div>
+          </div>
+          <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+            <button type="button" id="btnInstallPwaSettings" class="btn btn-primary" onclick="window.app.triggerPwaInstall()">
+              <span>📲</span> Instalar en este Dispositivo
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.app.openPwaHelpModal()">
+              <span>ℹ️</span> Instrucciones de Instalación
+            </button>
+          </div>
+        </div>
       </section>
 
     </main>
@@ -1170,24 +1217,25 @@
               </div>
             </div>
 
-            <!-- Imagen por Link / URL Externa -->
+            <!-- Imagen por Link / URL Externa (Diseño Compacto Optimizado para Móvil) -->
             <div class="form-group">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                <label class="form-label" style="margin: 0;">Enlace de Imagen (URL Web Ligera):</label>
+                <label class="form-label" style="margin: 0; font-size: 0.825rem; font-weight: 600;">Enlace de Imagen (URL Web):</label>
                 <button type="button" class="btn-paste-helper" onclick="window.app.pasteToInput('prodImagenUrlInput', () => window.app.updateProductImagePreview())" title="Pegar enlace de imagen">📋 Pegar</button>
               </div>
-              <input type="url" id="prodImagenUrlInput" class="form-input" placeholder="https://ejemplo.com/foto-producto.jpg" oninput="window.app.updateProductImagePreview()">
-              <small style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-                💡 Se almacena como link para mantener la base de datos veloz y ligera sin gastar megabytes de almacenamiento local ni nube.
-              </small>
-            </div>
-
-            <!-- Caja de Previsualización en Vivo de la Imagen -->
-            <div id="prodImagePreviewWrap" class="prod-image-preview-box">
-              <img id="prodImagePreview" src="" alt="Previsualización" style="display: none;" onerror="window.app.onProductImageError(this)">
-              <div id="prodImagePlaceholder" class="prod-image-placeholder">
-                <span style="font-size: 2rem;">🖼️</span>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">Sin imagen (o pega un link para vista previa)</span>
+              <div class="prod-image-compact-row">
+                <div id="prodImagePreviewWrap" class="prod-image-preview-thumb">
+                  <img id="prodImagePreview" src="" alt="Previsualización" style="display: none;" onerror="window.app.onProductImageError(this)">
+                  <div id="prodImagePlaceholder" class="prod-image-placeholder-thumb">
+                    <span>🖼️</span>
+                  </div>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <input type="url" id="prodImagenUrlInput" class="form-input" placeholder="https://ejemplo.com/foto.jpg" oninput="window.app.updateProductImagePreview()">
+                  <small style="display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">
+                    💡 Enlace web ligero (sin peso para tu base de datos)
+                  </small>
+                </div>
               </div>
             </div>
 
@@ -1361,6 +1409,67 @@
       </div>
     </div>
 
+    <!-- ======================================================== -->
+    <!-- MODAL: GUÍA DE INSTALACIÓN PWA (ANDROID / IPHONE / PC)    -->
+    <!-- ======================================================== -->
+    <div id="pwaInstallModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 580px;">
+        <div class="modal-header">
+          <h3 class="modal-title">📲 Instalar Aplicación Móvil</h3>
+          <button class="modal-close-btn" onclick="window.app.closeModal('pwaInstallModal')">✕</button>
+        </div>
+        <div class="modal-body" style="gap: 1rem;">
+          <div style="text-align: center; padding: 0.5rem 0;">
+            <div style="font-size: 3rem; margin-bottom: 0.25rem;">📦</div>
+            <h4 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Sistema de Encargos & Apartados</h4>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+              Aplicación Web Progresiva (PWA) optimizada para trabajar con o sin internet.
+            </p>
+          </div>
+
+          <!-- Pestañas o guías por plataforma -->
+          <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem;">
+            <h5 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: var(--brand-primary); display: flex; align-items: center; gap: 0.4rem;">
+              <span>🤖</span> En Celulares Android (Google Chrome / Brave)
+            </h5>
+            <ol style="margin: 0; padding-left: 1.25rem; font-size: 0.825rem; color: var(--text-secondary); line-height: 1.6;">
+              <li>Si aparece el botón <strong>"Instalar Ahora"</strong> abajo, pulsa sobre él.</li>
+              <li>Si no aparece automáticamente, toca el menú de los <strong>tres puntos (⋮)</strong> en la esquina superior derecha de Chrome.</li>
+              <li>Elige la opción <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.</li>
+              <li>Pulsa <strong>"Instalar"</strong>. El icono oficial aparecerá en el menú y pantalla de tu teléfono.</li>
+            </ol>
+          </div>
+
+          <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem;">
+            <h5 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #0284c7; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🍏</span> En iPhone / iPad (Safari)
+            </h5>
+            <ol style="margin: 0; padding-left: 1.25rem; font-size: 0.825rem; color: var(--text-secondary); line-height: 1.6;">
+              <li>Abre el sistema en el navegador <strong>Safari</strong>.</li>
+              <li>Toca el botón <strong>Compartir</strong> (cuadrado con flecha hacia arriba ⬆).</li>
+              <li>Desliza hacia abajo y presiona <strong>"Agregar al inicio"</strong> (Add to Home Screen).</li>
+              <li>Toca <strong>"Agregar"</strong> en la esquina superior derecha.</li>
+            </ol>
+          </div>
+
+          <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem;">
+            <h5 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #10b981; display: flex; align-items: center; gap: 0.4rem;">
+              <span>💻</span> En Computadoras (Chrome / Edge)
+            </h5>
+            <p style="margin: 0; font-size: 0.825rem; color: var(--text-secondary); line-height: 1.5;">
+              Haz clic en el icono de instalación (pantalla con flecha) que aparece en el extremo derecho de la barra de direcciones de tu navegador web.
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('pwaInstallModal')">Cerrar</button>
+          <button type="button" class="btn btn-primary" onclick="window.app.triggerPwaInstall()">
+            <span>📲</span> Instalar Ahora
+          </button>
+        </div>
+      </div>
+    </div>
+
 
     <!-- CONTENEDOR DE TICKETS TÉRMICOS PARA IMPRESIÓN LIMPIA -->
     <div id="ticketPrintArea"></div>
@@ -1378,6 +1487,6 @@
 
   <!-- Cliente oficial de Supabase cargado vía CDN con soporte Realtime -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="src/app.js?v=1.8.0"></script>
+  <script type="module" src="src/app.js?v=1.8.2"></script>
 </body>
 </html>

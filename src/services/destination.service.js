@@ -6,6 +6,9 @@
 import { storageService } from './storage.service.js';
 import { supabaseService } from './supabase.service.js';
 
+const SEED_FLAG_KEY = 'destinations_seed_v1_completed';
+const DELETED_DESTINATIONS_KEY = 'deleted_destinations_v1';
+
 class DestinationService {
   generateId() {
     return 'DST-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
@@ -15,7 +18,18 @@ class DestinationService {
   async getAllDestinations() {
     await this.seedDefaultDestinationsIfEmpty();
     const destinations = await storageService.getAll('destinations');
-    return destinations.sort((a, b) => (a.ciudad || '').localeCompare(b.ciudad || '') || (a.nombre || '').localeCompare(b.nombre || ''));
+
+    // Filtrar cualquier destino que el usuario haya eliminado explícitamente
+    let deletedIds = [];
+    try {
+      deletedIds = JSON.parse(localStorage.getItem(DELETED_DESTINATIONS_KEY) || '[]');
+    } catch (e) {}
+
+    const validDestinations = Array.isArray(deletedIds) && deletedIds.length > 0
+      ? destinations.filter(d => !deletedIds.includes(d.id))
+      : destinations;
+
+    return validDestinations.sort((a, b) => (a.ciudad || '').localeCompare(b.ciudad || '') || (a.nombre || '').localeCompare(b.nombre || ''));
   }
 
   async getDestinationById(id) {
@@ -24,8 +38,20 @@ class DestinationService {
 
   // Guardar o actualizar un destino / ubicación frecuente
   async saveDestination(destData) {
+    localStorage.setItem(SEED_FLAG_KEY, 'true');
     const now = new Date().toISOString();
     
+    // Si estaba marcado en la lista de eliminados, restaurar permiso para este ID
+    if (destData.id) {
+      try {
+        let deletedIds = JSON.parse(localStorage.getItem(DELETED_DESTINATIONS_KEY) || '[]');
+        if (deletedIds.includes(destData.id)) {
+          deletedIds = deletedIds.filter(x => x !== destData.id);
+          localStorage.setItem(DELETED_DESTINATIONS_KEY, JSON.stringify(deletedIds));
+        }
+      } catch (e) {}
+    }
+
     // Parsear link de WhatsApp / Google Maps
     let parsedMapsUrl = (destData.mapsUrl || '').trim();
     let lat = destData.lat !== undefined && destData.lat !== null && destData.lat !== '' ? Number(destData.lat) : null;
@@ -60,6 +86,19 @@ class DestinationService {
   }
 
   async deleteDestination(id) {
+    localStorage.setItem(SEED_FLAG_KEY, 'true');
+
+    // Registrar ID eliminado para que la sincronización con la nube no lo resucite
+    try {
+      let deletedIds = JSON.parse(localStorage.getItem(DELETED_DESTINATIONS_KEY) || '[]');
+      if (!deletedIds.includes(id)) {
+        deletedIds.push(id);
+        localStorage.setItem(DELETED_DESTINATIONS_KEY, JSON.stringify(deletedIds));
+      }
+    } catch (e) {
+      console.warn('Error al guardar tombstone de destino:', e);
+    }
+
     supabaseService.pushDelete('destinations', id).catch(() => {});
     return storageService.delete('destinations', id);
   }
@@ -97,10 +136,21 @@ class DestinationService {
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query || dest.ciudad || 'Bolivia')}`;
   }
 
-  // Precargar destinos por defecto si la base está vacía
+  // Precargar destinos por defecto SOLO la primera vez que se inicia la app limpia
   async seedDefaultDestinationsIfEmpty() {
+    // Si ya se procesó la siembra inicial alguna vez en este navegador, NUNCA volver a sembrar
+    if (localStorage.getItem(SEED_FLAG_KEY) === 'true') {
+      return;
+    }
+
     const existing = await storageService.getAll('destinations');
-    if (existing.length > 0) return;
+    if (existing.length > 0) {
+      localStorage.setItem(SEED_FLAG_KEY, 'true');
+      return;
+    }
+
+    // Marcar como sembrado de inmediato para que si el usuario los elimina no vuelvan a aparecer
+    localStorage.setItem(SEED_FLAG_KEY, 'true');
 
     const defaults = [
       {

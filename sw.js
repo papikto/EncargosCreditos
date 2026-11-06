@@ -3,7 +3,7 @@
  * Manejo de modo Offline, Control de Versiones del App Shell y Actualizaciones Seguras.
  */
 
-const APP_VERSION = 'v1.8.0';
+const APP_VERSION = 'v1.8.2';
 const CACHE_NAME = `encargos-cache-${APP_VERSION}`;
 
 // Assets esenciales para funcionamiento 100% autónomo sin internet
@@ -12,6 +12,10 @@ const STATIC_ASSETS = [
   './index.html',
   './index.css',
   './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './icons/icon.svg',
   './src/app.js',
   './src/services/storage.service.js',
   './src/services/customer.service.js',

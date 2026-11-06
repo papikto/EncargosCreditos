@@ -297,6 +297,25 @@ class SupabaseService {
       if (eventType === 'INSERT' || eventType === 'UPDATE') {
         if (!newRecord) return;
 
+        // Comprobar si el registro está marcado en la lista local de eliminados (tombstone)
+        if (table === 'destinations') {
+          try {
+            const deleted = JSON.parse(localStorage.getItem('deleted_destinations_v1') || '[]');
+            if (deleted.includes(newRecord.id)) {
+              console.log(`[Supabase Realtime] Omitiendo ${newRecord.id} de destinos porque fue eliminado por el usuario.`);
+              return;
+            }
+          } catch (e) {}
+        } else if (table === 'products') {
+          try {
+            const deleted = JSON.parse(localStorage.getItem('deleted_products_v1') || '[]');
+            if (deleted.includes(newRecord.id)) {
+              console.log(`[Supabase Realtime] Omitiendo ${newRecord.id} de productos porque fue eliminado por el usuario.`);
+              return;
+            }
+          } catch (e) {}
+        }
+
         // Caso especial: settings (se maneja por 'key')
         if (storeName === 'settings') {
           const key = newRecord.key || 'app_config';
@@ -715,9 +734,39 @@ class SupabaseService {
           continue;
         }
 
+        // Filtrar registros que fueron eliminados localmente para no resucitarlos
+        let sanitizedRemote = remoteRecords || [];
+        if (table === 'destinations') {
+          try {
+            const deletedDest = JSON.parse(localStorage.getItem('deleted_destinations_v1') || '[]');
+            if (deletedDest.length > 0) {
+              sanitizedRemote = sanitizedRemote.filter(r => {
+                if (deletedDest.includes(r.id)) {
+                  this.pushDelete('destinations', r.id).catch(() => {});
+                  return false;
+                }
+                return true;
+              });
+            }
+          } catch (e) {}
+        } else if (table === 'products') {
+          try {
+            const deletedProds = JSON.parse(localStorage.getItem('deleted_products_v1') || '[]');
+            if (deletedProds.length > 0) {
+              sanitizedRemote = sanitizedRemote.filter(r => {
+                if (deletedProds.includes(r.id)) {
+                  this.pushDelete('products', r.id).catch(() => {});
+                  return false;
+                }
+                return true;
+              });
+            }
+          } catch (e) {}
+        }
+
         // 2. Fusión segura con IndexedDB
         const localRecords = await storageService.getAll(storeName);
-        const mergeResult = this.mergeDataset(localRecords, remoteRecords || []);
+        const mergeResult = this.mergeDataset(localRecords, sanitizedRemote);
 
         totalConflictsPrevented += mergeResult.conflictsPrevented;
         totalUpdated += mergeResult.updatedCount;
